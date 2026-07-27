@@ -1,0 +1,1082 @@
+/* Zsearch — Google Material Design style. */
+
+/* ===== Base / reset ===== */
+/* 完全参考 zotero-addons 的布局方案：
+   - html, body, .viewport 都设 height:100%
+   - 不用 CSS flex:1 做主布局（Zotero 9 下不可靠）
+   - 滚动容器用 JS 设固定 height（= 窗口高度 - topbar - pagination）*/
+html, body {
+  padding: 0;
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: Roboto, -apple-system, "Segoe UI", "Microsoft YaHei",
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+.zsearch-root,
+.zsearch-root * {
+  box-sizing: border-box;
+  font-family: Roboto, -apple-system, "Segoe UI", "Microsoft YaHei",
+    "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  color: #202124;
+}
+
+#zsearch-search-window,
+#zsearch-search-window * {
+  font-family: Roboto, -apple-system, "Segoe UI", "Microsoft YaHei",
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+/* ===== 顶部固定区（header + filters + status + batch）===== */
+.zsearch-topbar {
+  width: 100%;
+  background: #ffffff;
+  border-bottom: 1px solid #dadce0;
+}
+
+/* ===== Header / search area ===== */
+.zsearch-header {
+  background: #ffffff;
+  padding: 24px 24px 12px 24px;
+  border-bottom: 1px solid #dadce0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.zsearch-logo {
+  display: flex;
+  align-items: baseline;
+  font-size: 28px;
+  font-weight: 400;
+  letter-spacing: -0.5px;
+  user-select: none;
+}
+.zsearch-logo-z {
+  color: #4285f4;
+  font-weight: 500;
+  font-size: 32px;
+}
+.zsearch-logo-text {
+  color: #4285f4;
+}
+
+.zsearch-searchbox-wrap {
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.zsearch-searchbox {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  background: #f1f3f4;
+  border: 1px solid transparent;
+  border-radius: 24px;
+  padding: 6px 8px 6px 16px;
+  transition: box-shadow 0.2s, background 0.2s, border 0.2s;
+}
+.zsearch-searchbox:hover,
+.zsearch-searchbox:focus-within {
+  background: #ffffff;
+  box-shadow: 0 1px 6px rgba(32, 33, 36, 0.28);
+  border-color: #dadce0;
+}
+
+.zsearch-search-icon {
+  color: #70757a;
+  font-size: 16px;
+  margin-right: 12px;
+  user-select: none;
+}
+
+.zsearch-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 16px;
+  color: #202124;
+  padding: 6px 0;
+}
+.zsearch-input::placeholder {
+  color: #80868b;
+}
+
+/* ===== Buttons ===== */
+.zsearch-btn {
+  font-family: Roboto, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s, box-shadow 0.15s, border 0.15s;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.zsearch-btn-primary {
+  background: #4285f4;
+  color: #ffffff;
+  margin-left: 8px;
+}
+.zsearch-btn-primary:hover {
+  background: #3367d6;
+  box-shadow: 0 1px 3px rgba(66, 133, 244, 0.4);
+}
+.zsearch-btn-primary:active {
+  background: #2a5fcd;
+}
+.zsearch-btn-primary:disabled {
+  background: #dadce0;
+  color: #80868b;
+  cursor: default;
+  box-shadow: none;
+}
+
+.zsearch-btn-secondary {
+  background: #ffffff;
+  color: #1a73e8;
+  border: 1px solid #dadce0;
+}
+.zsearch-btn-secondary:hover {
+  background: #f8f9fa;
+  border-color: #bdc1c6;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.15);
+}
+.zsearch-btn-secondary:disabled {
+  color: #bdc1c6;
+  cursor: default;
+}
+
+.zsearch-btn-small {
+  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: 6px;
+}
+
+/* ===== Filters (html:div + CSS flex, menulist 用 native=true) ===== */
+.zsearch-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 24px;
+  color: #70757a;
+  font-size: 13px;
+  background: #ffffff;
+  border-bottom: 1px solid #dadce0;
+  justify-content: center;
+}
+.zsearch-filter-label {
+  color: #70757a;
+  font-size: 13px;
+  margin: 0;
+}
+.zsearch-filter-input {
+  width: 70px;
+  padding: 4px 8px;
+  border: 1px solid #dadce0;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #202124;
+  background: #ffffff;
+}
+.zsearch-filter-input:focus {
+  border-color: #4285f4;
+  outline: none;
+}
+.zsearch-filter-sep {
+  color: #bdc1c6;
+}
+.zsearch-filter-divider {
+  width: 1px;
+  height: 20px;
+  background: #dadce0;
+  flex-shrink: 0;
+}
+.zsearch-filter-select {
+  padding: 4px 8px;
+  border: 1px solid #dadce0;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #202124;
+  background: #ffffff;
+  cursor: pointer;
+}
+.zsearch-filter-select:focus {
+  border-color: #4285f4;
+  outline: none;
+}
+
+/* XUL menulist 样式（native=true 使用操作系统原生下拉） */
+.zsearch-filter-menulist {
+  min-height: 28px;
+  height: 28px;
+  min-width: 120px;
+  font-size: 13px;
+  color: #202124;
+  cursor: pointer;
+}
+.zsearch-filter-menulist .menulist-label {
+  font-size: 13px;
+  color: #202124;
+}
+.zsearch-filter-menulist dropmarker {
+  min-width: 16px;
+}
+
+/* menulist 占位 div（JS 创建 menulist 前的占位） */
+.zsearch-filter-placeholder {
+  min-height: 28px;
+  height: 28px;
+  min-width: 120px;
+  display: inline-block;
+}
+
+/* ===== Status / count ===== */
+.zsearch-status {
+  color: #70757a;
+  font-size: 13px;
+  padding: 8px 32px;
+  background: #ffffff;
+  min-height: 18px;
+}
+.zsearch-status .zsearch-error-main {
+  font-weight: 500;
+}
+.zsearch-status .zsearch-error-detail {
+  margin-left: -4px;
+}
+.zsearch-status.zsearch-loading {
+  color: #4285f4;
+}
+.zsearch-status.zsearch-error {
+  color: #d93025;
+}
+
+/* ===== Batch actions ===== */
+.zsearch-batch {
+  padding: 4px 32px 8px 32px;
+  display: flex;
+  gap: 8px;
+  background: #ffffff;
+}
+
+/* ===== Results 滚动容器 ===== */
+/* 参考 zotero-addons #table-container：height 由 JS 动态设置，overflow-y: scroll */
+.zsearch-results-scroll {
+  width: 100%;
+  overflow-x: hidden;
+  overflow-y: scroll; /* 用 scroll 而非 auto，常驻滚动条避免布局抖动 */
+  background: #ffffff;
+}
+
+.zsearch-results {
+  padding: 0 32px 24px 32px;
+}
+
+.zsearch-result {
+  padding: 16px 0;
+  border-bottom: 1px solid #dadce0;
+}
+.zsearch-result:last-child {
+  border-bottom: none;
+}
+
+.zsearch-result-title {
+  font-size: 20px;
+  line-height: 1.3;
+  color: #1a0dab;
+  cursor: pointer;
+  text-decoration: none;
+  display: block;
+  margin-bottom: 2px;
+  font-weight: 400;
+}
+.zsearch-result-title:hover {
+  text-decoration: underline;
+}
+.zsearch-result-title:visited {
+  color: #681da8;
+}
+
+/* ===== 期刊等级徽章行（标题下，彩色矩形背景）===== */
+.zsearch-result-ranks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0 6px 0;
+  line-height: 1.5;
+}
+.zsearch-rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 3px;
+  color: #ffffff;
+  white-space: nowrap;
+  user-select: none;
+  letter-spacing: 0.2px;
+}
+
+/* JCR 分区：Q1=红, Q2=橙, Q3=黄褐, Q4=绿 */
+.zsearch-rank-badge.zsearch-rank-jcr {
+  background: #d93025;
+}
+.zsearch-rank-badge.zsearch-rank-jcr[data-value="Q2"],
+.zsearch-rank-badge.zsearch-rank-jcr[data-q="Q2"] {
+  background: #e8710a;
+}
+.zsearch-rank-badge.zsearch-rank-jcr[data-value="Q3"],
+.zsearch-rank-badge.zsearch-rank-jcr[data-q="Q3"] {
+  background: #c5a000;
+}
+.zsearch-rank-badge.zsearch-rank-jcr[data-value="Q4"],
+.zsearch-rank-badge.zsearch-rank-jcr[data-q="Q4"] {
+  background: #137333;
+}
+
+/* 中科院分区：1区=深红, 2区=橙, 3区=黄褐, 4区=绿 */
+.zsearch-rank-badge.zsearch-rank-cas {
+  background: #b31412;
+}
+.zsearch-rank-badge.zsearch-rank-cas[data-value="2"],
+.zsearch-rank-badge.zsearch-rank-cas[data-value="2区"] {
+  background: #e8710a;
+}
+.zsearch-rank-badge.zsearch-rank-cas[data-value="3"],
+.zsearch-rank-badge.zsearch-rank-cas[data-value="3区"] {
+  background: #c5a000;
+}
+.zsearch-rank-badge.zsearch-rank-cas[data-value="4"],
+.zsearch-rank-badge.zsearch-rank-cas[data-value="4区"] {
+  background: #137333;
+}
+
+/* 影响因子 IF：紫色 */
+.zsearch-rank-badge.zsearch-rank-jcrif {
+  background: #681da8;
+}
+
+/* EI 检索：蓝色 */
+.zsearch-rank-badge.zsearch-rank-ei {
+  background: #1a73e8;
+}
+
+/* CSSCI：青色 */
+.zsearch-rank-badge.zsearch-rank-cssci {
+  background: #00897b;
+}
+
+/* 北大核心：靛蓝 */
+.zsearch-rank-badge.zsearch-rank-pku {
+  background: #3949ab;
+}
+
+/* CSCD：粉红 */
+.zsearch-rank-badge.zsearch-rank-cscd {
+  background: #d81b60;
+}
+
+/* 中国科技核心：棕色 */
+.zsearch-rank-badge.zsearch-rank-chinacore {
+  background: #6d4c41;
+}
+
+/* 预警期刊：深红闪烁 */
+.zsearch-rank-badge.zsearch-rank-warn {
+  background: #b71c1c;
+  animation: zsearch-warn-pulse 1.5s ease-in-out infinite;
+}
+@keyframes zsearch-warn-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.zsearch-result-meta {
+  color: #4d5156;
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 2px;
+}
+
+.zsearch-result-url {
+  color: #006621;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 4px;
+  word-break: break-all;
+}
+
+.zsearch-result-abstract {
+  color: #4d5156;
+  font-size: 14px;
+  line-height: 1.58;
+  margin-bottom: 8px;
+  display: -webkit-box;
+  -webkit-line-clamp: 1; /* 一行摘要 */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.zsearch-result-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* ===== Badges ===== */
+.zsearch-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+  user-select: none;
+}
+.zsearch-badge-cited {
+  background: #e8eaed;
+  color: #3c4043;
+}
+.zsearch-badge-oa {
+  background: #e6f4ea;
+  color: #137333;
+}
+.zsearch-badge-locked {
+  background: #fce8e6;
+  color: #c5221f;
+}
+.zsearch-badge-exists {
+  background: #fef7e0;
+  color: #b06000;
+  border: 1px solid #f9ab00;
+}
+/* 来源徽章 */
+.zsearch-badge-source {
+  background: #e8f0fe;
+  color: #1967d2;
+  font-size: 11px;
+}
+.zsearch-badge-source-multi {
+  background: #ceead6;
+  color: #137333;
+  font-weight: 600;
+}
+
+/* ===== 关键词高亮 ===== */
+.zsearch-highlight {
+  background: #fff3cd;
+  color: #000;
+  padding: 0 2px;
+  border-radius: 2px;
+  font-weight: 500;
+}
+
+/* ===== DOI 复制按钮（迷你按钮）===== */
+.zsearch-btn-mini {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid #dadce0;
+  background: #ffffff;
+  color: #1a73e8;
+  cursor: pointer;
+  margin-left: 8px;
+  vertical-align: middle;
+  transition: background 0.15s, border-color 0.15s;
+}
+.zsearch-btn-mini:hover {
+  background: #f1f3f4;
+  border-color: #bdc1c6;
+}
+.zsearch-btn-copy:active {
+  background: #e8f0fe;
+}
+
+/* ===== 图标按钮（历史等）===== */
+.zsearch-btn-icon {
+  font-size: 16px;
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background 0.15s;
+  line-height: 1;
+}
+.zsearch-btn-icon:hover {
+  background: #f1f3f4;
+}
+
+/* ===== 搜索历史面板 ===== */
+.zsearch-history-panel {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 4px;
+  width: 480px;
+  max-width: 90vw;
+  background: #ffffff;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  padding: 8px 0;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.zsearch-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 16px 8px 16px;
+  border-bottom: 1px solid #f1f3f4;
+  font-size: 12px;
+  color: #70757a;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.zsearch-history-clear-btn {
+  font-size: 12px;
+  color: #1a73e8;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+}
+.zsearch-history-clear-btn:hover {
+  text-decoration: underline;
+}
+.zsearch-history-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #202124;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.1s;
+}
+.zsearch-history-item:hover {
+  background: #f1f3f4;
+}
+.zsearch-history-item-icon {
+  color: #70757a;
+  font-size: 12px;
+}
+.zsearch-history-empty {
+  padding: 16px;
+  text-align: center;
+  color: #70757a;
+  font-size: 13px;
+}
+
+/* ===== 收藏按钮（星标）===== */
+.zsearch-btn-star {
+  font-size: 16px;
+  padding: 2px 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #70757a;
+  line-height: 1;
+}
+.zsearch-btn-star:hover {
+  color: #f9ab00;
+}
+.zsearch-btn-star.zsearch-starred {
+  color: #f9ab00;
+}
+
+/* ===== 摘要展开状态 ===== */
+.zsearch-result-abstract.zsearch-abstract-expanded {
+  -webkit-line-clamp: unset;
+  display: block;
+  white-space: pre-wrap;
+}
+
+/* ===== 模态弹窗（引用预览、统计、收藏）===== */
+.zsearch-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.zsearch-modal {
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.2);
+  padding: 24px;
+  max-width: 600px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.zsearch-modal-title {
+  font-size: 18px;
+  font-weight: 500;
+  color: #202124;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #dadce0;
+}
+.zsearch-modal-entry-title {
+  font-size: 14px;
+  color: #3c4043;
+  margin-bottom: 16px;
+  font-style: italic;
+  line-height: 1.4;
+}
+.zsearch-modal-note {
+  font-size: 12px;
+  color: #70757a;
+  background: #f8f9fa;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+  border-left: 3px solid #4285f4;
+}
+
+/* 引用格式弹窗：样式选择下拉框 */
+.zsearch-citation-style-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.zsearch-citation-style-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #202124;
+  white-space: nowrap;
+}
+.zsearch-citation-style-select {
+  flex: 1;
+  padding: 6px 8px;
+  font-size: 13px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #202124;
+  cursor: pointer;
+  max-width: 360px;
+}
+.zsearch-citation-style-select:focus {
+  border-color: #4285f4;
+  outline: none;
+}
+/* 引用文本预览区 */
+.zsearch-citation-text-preview {
+  flex: 1;
+  font-size: 13px;
+  color: #202124;
+  line-height: 1.6;
+  word-break: break-word;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  min-height: 60px;
+  white-space: pre-wrap;
+}
+/* 模态弹窗按钮行 */
+.zsearch-modal-btn-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* 统计面板 */
+.zsearch-stats-section {
+  margin-bottom: 20px;
+}
+.zsearch-stats-section-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #202124;
+  margin-bottom: 8px;
+}
+.zsearch-stats-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 13px;
+  color: #3c4043;
+}
+.zsearch-stats-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.zsearch-stats-bar-label {
+  font-size: 12px;
+  color: #70757a;
+  min-width: 60px;
+  text-align: right;
+}
+.zsearch-stats-bar-wrap {
+  flex: 1;
+  background: #f1f3f4;
+  border-radius: 4px;
+  height: 20px;
+  overflow: hidden;
+}
+.zsearch-stats-bar {
+  background: #4285f4;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 500;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  min-width: 2px;
+  transition: width 0.3s;
+}
+
+/* 阅读队列列表 */
+.zsearch-starred-list {
+  margin-bottom: 16px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.zsearch-starred-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f1f3f4;
+}
+.zsearch-starred-item-info {
+  flex: 1;
+  cursor: pointer;
+}
+.zsearch-starred-item-title {
+  font-size: 14px;
+  color: #1a0dab;
+  margin-bottom: 2px;
+}
+.zsearch-starred-item-info:hover .zsearch-starred-item-title {
+  text-decoration: underline;
+}
+.zsearch-starred-item-meta {
+  font-size: 12px;
+  color: #70757a;
+}
+
+.zsearch-result-spacer {
+  flex: 1;
+}
+
+/* ===== Empty / loading states ===== */
+.zsearch-empty {
+  color: #70757a;
+  font-size: 14px;
+  padding: 48px 0;
+  text-align: center;
+}
+
+.zsearch-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #dadce0;
+  border-top-color: #4285f4;
+  border-radius: 50%;
+  animation: zsearch-spin 0.8s linear infinite;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+@keyframes zsearch-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ===== Pagination ===== */
+.zsearch-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px 0 24px 0;
+  background: #ffffff;
+  border-top: 1px solid #dadce0;
+}
+.zsearch-page-info {
+  color: #3c4043;
+  font-size: 14px;
+}
+
+/* ===== 高级搜索语法快捷按钮 ===== */
+.zsearch-syntax-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  justify-content: center;
+}
+.zsearch-syntax-label {
+  font-size: 12px;
+  color: #70757a;
+  margin-right: 4px;
+}
+.zsearch-btn-syntax {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #f1f3f4;
+  color: #1a73e8;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-family: "Courier New", Consolas, monospace;
+  transition: background 0.15s, border-color 0.15s;
+}
+.zsearch-btn-syntax:hover {
+  background: #e8f0fe;
+  border-color: #d2e3fc;
+}
+.zsearch-btn-syntax:active {
+  background: #d2e3fc;
+}
+
+/* ===== 结果二次筛选条（Refine）===== */
+.zsearch-refine {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 32px 8px 32px;
+  background: #ffffff;
+  border-bottom: 1px solid #f1f3f4;
+}
+.zsearch-refine-label {
+  font-size: 12px;
+  color: #70757a;
+  margin-right: 4px;
+}
+.zsearch-btn-chip {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: #f1f3f4;
+  color: #3c4043;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.zsearch-btn-chip:hover {
+  background: #e8eaed;
+}
+.zsearch-btn-chip.zsearch-refine-active {
+  background: #1a73e8;
+  color: #ffffff;
+  border-color: #1a73e8;
+}
+.zsearch-refine-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: #70757a;
+}
+
+/* ===== 批量操作区：全选 + 导出按钮 ===== */
+.zsearch-batch-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #3c4043;
+  cursor: pointer;
+  user-select: none;
+  margin-right: 8px;
+}
+.zsearch-batch-select-all input {
+  cursor: pointer;
+}
+
+/* ===== 结果卡片左侧复选框 ===== */
+.zsearch-result {
+  position: relative;
+  padding-left: 36px;
+}
+.zsearch-result-checkbox {
+  position: absolute;
+  left: 8px;
+  top: 20px;
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+/* ===== 找相关文献按钮 ===== */
+.zsearch-btn-related {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #1a73e8;
+  border: 1px solid #dadce0;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.zsearch-btn-related:hover {
+  background: #f8f9fa;
+  border-color: #bdc1c6;
+}
+
+/* ===== Preference pane (竖向排版, Google Material 表单风格) ===== */
+.zsearch-prefs-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px 16px 16px 8px;
+  max-width: 640px;
+}
+
+.zsearch-prefs-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.zsearch-prefs-section > label > h2,
+.zsearch-prefs-section label h2 {
+  font-size: 15px;
+  font-weight: 500;
+  color: #202124;
+  margin: 0 0 8px 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e8eaed;
+}
+
+/* 每个字段：label 在上，控件在下，竖向堆叠 */
+.zsearch-prefs-field {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 14px;
+  gap: 4px;
+}
+
+.zsearch-prefs-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #3c4043;
+  margin-bottom: 2px;
+}
+
+.zsearch-prefs-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: Roboto, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  color: #202124;
+  background: #ffffff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
+}
+.zsearch-prefs-input:focus {
+  outline: none;
+  border-color: #4285f4;
+  box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.2);
+}
+.zsearch-prefs-input-narrow {
+  width: 120px;
+}
+
+.zsearch-prefs-select {
+  width: 100%;
+  max-width: 280px;
+}
+
+.zsearch-prefs-help {
+  color: #70757a;
+  font-size: 12px;
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.zsearch-prefs-link {
+  color: #1a73e8;
+  font-size: 12px;
+  margin-top: 2px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+.zsearch-prefs-link:hover {
+  text-decoration: underline;
+}
+
+.zsearch-pdf-order-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  min-height: 40px;
+}
+
+.zsearch-prefs-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.zsearch-prefs-test-result {
+  color: #137333;
+  font-size: 13px;
+}
+.zsearch-prefs-test-result.zsearch-fail {
+  color: #d93025;
+}
+
+.zsearch-prefs-footer {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #dadce0;
+  color: #70757a;
+  font-size: 12px;
+}
+
+/* ===== Scrollbar (subtle, Google-like) ===== */
+.zsearch-results-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+.zsearch-results-scroll::-webkit-scrollbar-thumb {
+  background: #dadce0;
+  border-radius: 5px;
+}
+.zsearch-results-scroll::-webkit-scrollbar-thumb:hover {
+  background: #bdc1c6;
+}
+.zsearch-results-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}

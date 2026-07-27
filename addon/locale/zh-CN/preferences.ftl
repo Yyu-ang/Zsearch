@@ -1,0 +1,41 @@
+zsearch-prefs-title = Zsearch
+
+zsearch-prefs-section-api = Elsevier API 凭证
+zsearch-prefs-section-search-sources = 其他搜索源
+zsearch-prefs-section-search = 搜索与导入
+zsearch-prefs-section-pdf = PDF 下载顺序
+zsearch-prefs-section-network = 网络与重试
+
+zsearch-prefs-general = 通用
+zsearch-prefs-apikey = Elsevier API Key
+zsearch-prefs-apikey-help = 在 https://dev.elsevier.com 免费获取。搜索必需。
+zsearch-prefs-insttoken = 机构令牌 (Insttoken)
+zsearch-prefs-insttoken-help = 可选，但全文 PDF 下载必需。请向所在机构图书馆索取。
+zsearch-prefs-easyscholar-key = EasyScholar API Key
+zsearch-prefs-easyscholar-key-help = 在 https://www.easyscholar.cc/console/user/open 获取。用于在搜索结果中显示期刊等级徽章（JCR 分区 / 中科院分区 / EI / CSSCI 等）。可选。
+zsearch-prefs-springer-key = Springer API Key
+zsearch-prefs-springer-key-help = 在 https://dev.springernature.com 免费获取。Springer 搜索源必需。
+zsearch-prefs-semantic-scholar-key = Semantic Scholar API Key
+zsearch-prefs-semantic-scholar-key-help = 推荐配置。在 https://www.semanticscholar.org/product/api 申请。无 Key 可能触发 403 反爬限制；有 Key：约 1 次 / 秒。
+zsearch-prefs-pubmed-key = PubMed API Key
+zsearch-prefs-pubmed-key-help = 可选。在 https://www.ncbi.nlm.nih.gov/account/settings/ 申请。无 Key：3 次 / 秒；有 Key：10 次 / 秒。
+zsearch-prefs-unpaywall-email = Unpaywall Email
+zsearch-prefs-unpaywall-email-help = 用于通过 Unpaywall 查找开放获取 PDF（免费，无需 Key）。任意有效邮箱均可，建议使用真实邮箱以获取合理用量配额。
+zsearch-prefs-autodownload = 导入时自动下载 PDF
+zsearch-prefs-pagesize = 每页结果数
+zsearch-prefs-defaultsort = 默认排序
+zsearch-prefs-timeout = 请求超时（毫秒）
+zsearch-prefs-retries = 最大重试次数
+zsearch-prefs-pdf-order-help = 拖动以下行调整 PDF 下载渠道的尝试顺序。任一渠道下载成功即停止。
+zsearch-prefs-scihub-url = SciHub 地址
+zsearch-prefs-scihub-url-help = SciHub 镜像基地址，如 https://sci-hub.ru/（须以 / 结尾）
+zsearch-prefs-apply-link = 前往申请 →
+zsearch-prefs-test = 测试连接
+zsearch-prefs-test-all = 测试所有连接
+zsearch-prefs-test-success = API Key 有效。
+zsearch-prefs-test-fail = 测试失败：{ $message }
+zsearch-prefs-help = { $name } v{ $version }（构建于 { $time }）
+
+zsearch-filter-sort-relevance = 相关度
+zsearch-filter-sort-cited = 引用数（降序）
+zsearch-filter-sort-date = 日期（最新）

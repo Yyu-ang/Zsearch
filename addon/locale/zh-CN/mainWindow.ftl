@@ -1,0 +1,3 @@
+zsearch-menu-search =
+    .label = Zsearch 搜索…
+    .tooltiptext = 搜索 Elsevier (Scopus/ScienceDirect)

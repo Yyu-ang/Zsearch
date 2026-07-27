@@ -1,0 +1,41 @@
+zsearch-prefs-title = Zsearch
+
+zsearch-prefs-section-api = Elsevier API Credentials
+zsearch-prefs-section-search-sources = Other Search Sources
+zsearch-prefs-section-search = Search & Import
+zsearch-prefs-section-pdf = PDF Download Order
+zsearch-prefs-section-network = Network & Retry
+
+zsearch-prefs-general = General
+zsearch-prefs-apikey = Elsevier API Key
+zsearch-prefs-apikey-help = Get it at https://dev.elsevier.com (free). Required for searching.
+zsearch-prefs-insttoken = Institution Token (Insttoken)
+zsearch-prefs-insttoken-help = Optional but required for full-text PDF download. Obtain from your institution library.
+zsearch-prefs-easyscholar-key = EasyScholar API Key
+zsearch-prefs-easyscholar-key-help = Get it at https://www.easyscholar.cc/console/user/open. Used to display journal rank badges (JCR / CAS / EI / CSSCI etc.) in search results. Optional.
+zsearch-prefs-springer-key = Springer API Key
+zsearch-prefs-springer-key-help = Get it at https://dev.springernature.com (free). Required for Springer search source.
+zsearch-prefs-semantic-scholar-key = Semantic Scholar API Key
+zsearch-prefs-semantic-scholar-key-help = Recommended. Apply at https://www.semanticscholar.org/product/api. Without key, 403 anti-bot may trigger; with key: ~1 req / sec.
+zsearch-prefs-pubmed-key = PubMed API Key
+zsearch-prefs-pubmed-key-help = Optional. Apply at https://www.ncbi.nlm.nih.gov/account/settings/. Without key: 3 req / sec; with key: 10 req / sec.
+zsearch-prefs-unpaywall-email = Unpaywall Email
+zsearch-prefs-unpaywall-email-help = Used for Open Access PDF lookup via Unpaywall (free, no key). Any valid email works; recommended your real email for fair-use quota.
+zsearch-prefs-autodownload = Auto-download PDF when importing
+zsearch-prefs-pagesize = Results per page
+zsearch-prefs-defaultsort = Default sort
+zsearch-prefs-timeout = Request timeout (ms)
+zsearch-prefs-retries = Max retries
+zsearch-prefs-pdf-order-help = Drag rows to set the order in which PDF download providers are tried. The first one that succeeds wins.
+zsearch-prefs-scihub-url = SciHub URL
+zsearch-prefs-scihub-url-help = Base URL of SciHub mirror, e.g. https://sci-hub.ru/ (must end with /)
+zsearch-prefs-apply-link = Apply here →
+zsearch-prefs-test = Test connection
+zsearch-prefs-test-all = Test all connections
+zsearch-prefs-test-success = API Key valid.
+zsearch-prefs-test-fail = Test failed: { $message }
+zsearch-prefs-help = { $name } v{ $version } (built { $time })
+
+zsearch-filter-sort-relevance = Relevance
+zsearch-filter-sort-cited = Cited (desc)
+zsearch-filter-sort-date = Date (newest)

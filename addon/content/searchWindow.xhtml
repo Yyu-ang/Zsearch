@@ -1,0 +1,209 @@
+<?xml version="1.0"?>
+<!--
+  Zsearch 搜索窗口
+  完全参考 zotero-addons 的实现：
+  - CSS 内联在 <style> 标签里（外部 CSS 在 XHTML 窗口可能不加载）
+  - 滚动容器用 height + overflow-y: scroll
+  - 高度由 JS 动态计算
+-->
+<?xml-stylesheet href="chrome://global/skin/" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero/skin/zotero.css" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero-platform/content/zotero-react-client.css" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero-platform/content/zotero.css" type="text/css"?>
+<!DOCTYPE html>
+<html
+  lang="en"
+  xmlns="http://www.w3.org/1999/xhtml"
+  xmlns:xul="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+  xmlns:html="http://www.w3.org/1999/xhtml"
+  windowtype="zsearch-search-window"
+  sizemode="normal"
+  scrolling="false"
+  persist="screenX screenY width height sizemode"
+>
+  <head>
+    <title>Zsearch</title>
+    <meta charset="utf-8" />
+    <style>
+      /* ===== 布局 CSS 内联（参考 zotero-addons，外部 CSS 在 XHTML 窗口可能不加载）===== */
+      html, body {
+        padding: 0;
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        font-family: Roboto, -apple-system, "Segoe UI", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+      }
+      #zsearch-results-scroll {
+        width: 100%;
+        overflow-x: hidden;
+        overflow-y: scroll;
+        background: #ffffff;
+      }
+      .zsearch-results {
+        padding: 0 32px 24px 32px;
+      }
+      .zsearch-result {
+        position: relative;
+        padding: 16px 0 16px 36px;
+        border-bottom: 1px solid #dadce0;
+      }
+      .zsearch-result-checkbox {
+        position: absolute;
+        left: 8px;
+        top: 20px;
+        cursor: pointer;
+        width: 16px;
+        height: 16px;
+      }
+
+      /* ===== 期刊等级徽章（内联，外部 CSS 不可靠）===== */
+      .zsearch-result-ranks {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin: 4px 0 6px 0;
+        line-height: 1.5;
+      }
+      .zsearch-rank-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 3px;
+        color: #ffffff;
+        white-space: nowrap;
+        user-select: none;
+        letter-spacing: 0.2px;
+        border: 1px solid rgba(0,0,0,0.1);
+      }
+      .zsearch-rank-badge.zsearch-rank-jcr {
+        background: #d93025;
+      }
+      .zsearch-rank-badge.zsearch-rank-jcr[data-value="Q2"] { background: #e8710a; }
+      .zsearch-rank-badge.zsearch-rank-jcr[data-value="Q3"] { background: #c5a000; }
+      .zsearch-rank-badge.zsearch-rank-jcr[data-value="Q4"] { background: #137333; }
+      .zsearch-rank-badge.zsearch-rank-cas {
+        background: #b31412;
+      }
+      .zsearch-rank-badge.zsearch-rank-cas[data-value="2"],
+      .zsearch-rank-badge.zsearch-rank-cas[data-value="2区"] { background: #e8710a; }
+      .zsearch-rank-badge.zsearch-rank-cas[data-value="3"],
+      .zsearch-rank-badge.zsearch-rank-cas[data-value="3区"] { background: #c5a000; }
+      .zsearch-rank-badge.zsearch-rank-cas[data-value="4"],
+      .zsearch-rank-badge.zsearch-rank-cas[data-value="4区"] { background: #137333; }
+      .zsearch-rank-badge.zsearch-rank-jcrif { background: #681da8; }
+      .zsearch-rank-badge.zsearch-rank-ei { background: #1a73e8; }
+      .zsearch-rank-badge.zsearch-rank-cssci { background: #00897b; }
+      .zsearch-rank-badge.zsearch-rank-pku { background: #3949ab; }
+      .zsearch-rank-badge.zsearch-rank-cscd { background: #d81b60; }
+      .zsearch-rank-badge.zsearch-rank-chinacore { background: #6d4c41; }
+      .zsearch-rank-badge.zsearch-rank-warn {
+        background: #b71c1c;
+        animation: zsearch-warn-pulse 1.5s ease-in-out infinite;
+      }
+      @keyframes zsearch-warn-pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+      }
+      /* 搜索框与语法栏垂直堆叠（内联 !important 确保优先于可能被缓存的外部 CSS） */
+      .zsearch-searchbox-wrap {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        width: 100% !important;
+        max-width: 720px !important;
+      }
+      .zsearch-syntax-bar {
+        width: 100% !important;
+        margin-top: 8px !important;
+      }
+    </style>
+    <link rel="stylesheet" href="chrome://zsearch/content/zsearch.css" type="text/css" />
+  </head>
+  <body>
+    <!-- 顶部固定区 -->
+    <div id="zsearch-topbar" class="zsearch-topbar">
+      <div id="zsearch-header" class="zsearch-header">
+        <div class="zsearch-logo">
+          <span class="zsearch-logo-z">Z</span>
+          <span class="zsearch-logo-text">search</span>
+        </div>
+        <div class="zsearch-searchbox-wrap">
+          <div class="zsearch-searchbox">
+            <span class="zsearch-search-icon">🔍</span>
+            <div id="zsearch-source-placeholder" class="zsearch-source-select"></div>
+            <input id="zsearch-input" class="zsearch-input" type="text" autocomplete="off" spellcheck="false" />
+            <button id="zsearch-history-btn" class="zsearch-btn zsearch-btn-icon" title="历史">🕘</button>
+            <button id="zsearch-search-btn" class="zsearch-btn zsearch-btn-primary">Search</button>
+          </div>
+          <div id="zsearch-history-panel" class="zsearch-history-panel" style="display: none;"></div>
+          <!-- 高级搜索语法快捷按钮：点击插入对应语法到搜索框 -->
+          <div id="zsearch-syntax-bar" class="zsearch-syntax-bar">
+            <span class="zsearch-syntax-label">语法:</span>
+            <button class="zsearch-btn zsearch-btn-syntax" data-insert="TITLE-ABS-KEY()">{title}</button>
+            <button class="zsearch-btn zsearch-btn-syntax" data-insert="AUTHOR-NAME()">{author}</button>
+            <button class="zsearch-btn zsearch-btn-syntax" data-insert="AFFIL()">{affil}</button>
+            <button class="zsearch-btn zsearch-btn-syntax" data-insert="PUBYEAR &gt; 2020">{year}</button>
+            <button class="zsearch-btn zsearch-btn-syntax" data-insert=" AND ">AND</button>
+            <button class="zsearch-btn zsearch-btn-syntax" data-insert=" OR ">OR</button>
+            <button class="zsearch-btn zsearch-btn-syntax" data-insert=" NOT ">NOT</button>
+            <button class="zsearch-btn zsearch-btn-syntax" data-insert="LIMIT-TO(DOCTYPE,&quot;ar&quot;)">{ar}</button>
+            <button class="zsearch-btn zsearch-btn-syntax" data-insert="LIMIT-TO(OA,&quot;all&quot;)">{oa}</button>
+            <span class="zsearch-filter-divider"></span>
+            <button id="zsearch-starred-btn" class="zsearch-btn zsearch-btn-syntax" title="阅读队列">★ 收藏</button>
+            <button id="zsearch-stats-btn" class="zsearch-btn zsearch-btn-syntax" title="结果统计">📊 统计</button>
+          </div>
+        </div>
+      </div>
+      <div id="zsearch-filters" class="zsearch-filters">
+        <label class="zsearch-filter-label">Year</label>
+        <input id="zsearch-year-from" class="zsearch-filter-input" type="number" placeholder="2015" min="1900" max="2100" />
+        <span class="zsearch-filter-sep">–</span>
+        <input id="zsearch-year-to" class="zsearch-filter-input" type="number" placeholder="2025" min="1900" max="2100" />
+        <span class="zsearch-filter-divider"></span>
+        <label class="zsearch-filter-label">Sort</label>
+        <div id="zsearch-sort-placeholder" class="zsearch-filter-placeholder"></div>
+        <span class="zsearch-filter-divider"></span>
+        <label class="zsearch-filter-label">Type</label>
+        <div id="zsearch-type-placeholder" class="zsearch-filter-placeholder"></div>
+      </div>
+      <div id="zsearch-status" class="zsearch-status"></div>
+      <!-- 结果二次筛选条：对当前页结果即时过滤，不重新请求 API -->
+      <div id="zsearch-refine" class="zsearch-refine" style="display: none;">
+        <span class="zsearch-refine-label">Refine:</span>
+        <button class="zsearch-btn zsearch-btn-chip zsearch-refine-active" data-refine="all">All</button>
+        <button class="zsearch-btn zsearch-btn-chip" data-refine="oa">OA</button>
+        <button class="zsearch-btn zsearch-btn-chip" data-refine="cited50">Cited≥50</button>
+        <button class="zsearch-btn zsearch-btn-chip" data-refine="cited100">Cited≥100</button>
+        <button class="zsearch-btn zsearch-btn-chip" data-refine="year3">Last 3y</button>
+        <button class="zsearch-btn zsearch-btn-chip" data-refine="year5">Last 5y</button>
+        <button class="zsearch-btn zsearch-btn-chip" data-refine="review">Review</button>
+        <span id="zsearch-refine-count" class="zsearch-refine-count"></span>
+      </div>
+      <div id="zsearch-batch" class="zsearch-batch" style="display: none;">
+        <label class="zsearch-batch-select-all">
+          <input type="checkbox" id="zsearch-select-all" />
+          <span>Select all</span>
+        </label>
+        <button id="zsearch-import-all" class="zsearch-btn zsearch-btn-secondary">Import all on page</button>
+        <button id="zsearch-export-bibtex" class="zsearch-btn zsearch-btn-secondary" disabled="disabled">Export BibTeX</button>
+        <button id="zsearch-export-ris" class="zsearch-btn zsearch-btn-secondary" disabled="disabled">Export RIS</button>
+        <button id="zsearch-export-csv" class="zsearch-btn zsearch-btn-secondary" disabled="disabled">Export CSV</button>
+      </div>
+    </div>
+
+    <!-- 滚动容器：height 由 JS 动态设置 -->
+    <div id="zsearch-results-scroll" class="zsearch-results-scroll">
+      <div id="zsearch-results" class="zsearch-results"></div>
+    </div>
+
+    <!-- 底部固定区 -->
+    <div id="zsearch-pagination" class="zsearch-pagination" style="display: none;">
+      <button id="zsearch-prev" class="zsearch-btn zsearch-btn-secondary">‹ Prev</button>
+      <span id="zsearch-page-info" class="zsearch-page-info"></span>
+      <button id="zsearch-next" class="zsearch-btn zsearch-btn-secondary">Next ›</button>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,216 @@
+<linkset>
+  <html:link rel="localization" href="__addonRef__-preferences.ftl" />
+</linkset>
+
+<prefpane id="__addonRef__-preferences" onload="Zotero.__addonInstance__.hooks.onPrefsEvent('load', { window });">
+  <preferences>
+    <preference id="extensions.zotero.zsearch.apiKey" name="extensions.zotero.zsearch.apiKey" type="string" />
+    <preference id="extensions.zotero.zsearch.insttoken" name="extensions.zotero.zsearch.insttoken" type="string" />
+    <preference id="extensions.zotero.zsearch.easyScholarKey" name="extensions.zotero.zsearch.easyScholarKey" type="string" />
+    <preference id="extensions.zotero.zsearch.springerKey" name="extensions.zotero.zsearch.springerKey" type="string" />
+    <preference id="extensions.zotero.zsearch.semanticScholarKey" name="extensions.zotero.zsearch.semanticScholarKey" type="string" />
+    <preference id="extensions.zotero.zsearch.pubmedApiKey" name="extensions.zotero.zsearch.pubmedApiKey" type="string" />
+    <preference id="extensions.zotero.zsearch.unpaywallEmail" name="extensions.zotero.zsearch.unpaywallEmail" type="string" />
+    <preference id="extensions.zotero.zsearch.scihubUrl" name="extensions.zotero.zsearch.scihubUrl" type="string" />
+    <preference id="extensions.zotero.zsearch.autoDownloadPDF" name="extensions.zotero.zsearch.autoDownloadPDF" type="bool" />
+    <preference id="extensions.zotero.zsearch.pageSize" name="extensions.zotero.zsearch.pageSize" type="int" />
+    <preference id="extensions.zotero.zsearch.defaultSort" name="extensions.zotero.zsearch.defaultSort" type="string" />
+    <preference id="extensions.zotero.zsearch.requestTimeout" name="extensions.zotero.zsearch.requestTimeout" type="int" />
+    <preference id="extensions.zotero.zsearch.maxRetries" name="extensions.zotero.zsearch.maxRetries" type="int" />
+  </preferences>
+
+  <vbox class="zsearch-prefs-container">
+
+    <!-- ① API 凭证 -->
+    <groupbox class="zsearch-prefs-section">
+      <label><html:h2 data-l10n-id="zsearch-prefs-section-api" /></label>
+
+      <vbox class="zsearch-prefs-field">
+        <label data-l10n-id="zsearch-prefs-apikey" control="zsearch-apikey" class="zsearch-prefs-label" />
+        <html:input
+          id="zsearch-apikey"
+          type="text"
+          preference="extensions.zotero.zsearch.apiKey"
+          class="zsearch-prefs-input"
+        />
+        <label data-l10n-id="zsearch-prefs-apikey-help" class="zsearch-prefs-help" />
+        <label class="text-link zsearch-prefs-link" href="https://dev.elsevier.com" data-l10n-id="zsearch-prefs-apply-link" />
+      </vbox>
+
+      <vbox class="zsearch-prefs-field">
+        <label data-l10n-id="zsearch-prefs-insttoken" control="zsearch-insttoken" class="zsearch-prefs-label" />
+        <html:input
+          id="zsearch-insttoken"
+          type="text"
+          preference="extensions.zotero.zsearch.insttoken"
+          class="zsearch-prefs-input"
+        />
+        <label data-l10n-id="zsearch-prefs-insttoken-help" class="zsearch-prefs-help" />
+      </vbox>
+
+      <vbox class="zsearch-prefs-field">
+        <label data-l10n-id="zsearch-prefs-easyscholar-key" control="zsearch-easyscholar-key" class="zsearch-prefs-label" />
+        <html:input
+          id="zsearch-easyscholar-key"
+          type="text"
+          preference="extensions.zotero.zsearch.easyScholarKey"
+          class="zsearch-prefs-input"
+        />
+        <label data-l10n-id="zsearch-prefs-easyscholar-key-help" class="zsearch-prefs-help" />
+        <label class="text-link zsearch-prefs-link" href="https://www.easyscholar.cc/console/user/open" data-l10n-id="zsearch-prefs-apply-link" />
+      </vbox>
+
+      <hbox class="zsearch-prefs-actions">
+        <button id="zsearch-test-btn" data-l10n-id="zsearch-prefs-test" />
+        <button id="zsearch-test-all-btn" data-l10n-id="zsearch-prefs-test-all" />
+        <label id="zsearch-test-result" class="zsearch-prefs-test-result" />
+      </hbox>
+    </groupbox>
+
+    <!-- ② 其他搜索源 API Key -->
+    <groupbox class="zsearch-prefs-section">
+      <label><html:h2 data-l10n-id="zsearch-prefs-section-search-sources" /></label>
+
+      <vbox class="zsearch-prefs-field">
+        <label data-l10n-id="zsearch-prefs-springer-key" control="zsearch-springer-key" class="zsearch-prefs-label" />
+        <html:input
+          id="zsearch-springer-key"
+          type="text"
+          preference="extensions.zotero.zsearch.springerKey"
+          class="zsearch-prefs-input"
+        />
+        <label data-l10n-id="zsearch-prefs-springer-key-help" class="zsearch-prefs-help" />
+        <label class="text-link zsearch-prefs-link" href="https://dev.springernature.com/" data-l10n-id="zsearch-prefs-apply-link" />
+      </vbox>
+
+      <vbox class="zsearch-prefs-field">
+        <label data-l10n-id="zsearch-prefs-semantic-scholar-key" control="zsearch-semantic-scholar-key" class="zsearch-prefs-label" />
+        <html:input
+          id="zsearch-semantic-scholar-key"
+          type="text"
+          preference="extensions.zotero.zsearch.semanticScholarKey"
+          class="zsearch-prefs-input"
+        />
+        <label data-l10n-id="zsearch-prefs-semantic-scholar-key-help" class="zsearch-prefs-help" />
+        <label class="text-link zsearch-prefs-link" href="https://www.semanticscholar.org/product/api" data-l10n-id="zsearch-prefs-apply-link" />
+      </vbox>
+
+      <vbox class="zsearch-prefs-field">
+        <label data-l10n-id="zsearch-prefs-pubmed-key" control="zsearch-pubmed-key" class="zsearch-prefs-label" />
+        <html:input
+          id="zsearch-pubmed-key"
+          type="text"
+          preference="extensions.zotero.zsearch.pubmedApiKey"
+          class="zsearch-prefs-input"
+        />
+        <label data-l10n-id="zsearch-prefs-pubmed-key-help" class="zsearch-prefs-help" />
+        <label class="text-link zsearch-prefs-link" href="https://www.ncbi.nlm.nih.gov/account/settings/" data-l10n-id="zsearch-prefs-apply-link" />
+      </vbox>
+
+      <vbox class="zsearch-prefs-field">
+        <label data-l10n-id="zsearch-prefs-unpaywall-email" control="zsearch-unpaywall-email" class="zsearch-prefs-label" />
+        <html:input
+          id="zsearch-unpaywall-email"
+          type="text"
+          preference="extensions.zotero.zsearch.unpaywallEmail"
+          class="zsearch-prefs-input"
+        />
+        <label data-l10n-id="zsearch-prefs-unpaywall-email-help" class="zsearch-prefs-help" />
+        <label class="text-link zsearch-prefs-link" href="https://unpaywall.org/" data-l10n-id="zsearch-prefs-apply-link" />
+      </vbox>
+    </groupbox>
+
+    <!-- ③ 搜索与导入 -->
+    <groupbox class="zsearch-prefs-section">
+      <label><html:h2 data-l10n-id="zsearch-prefs-section-search" /></label>
+
+      <vbox class="zsearch-prefs-field">
+        <label data-l10n-id="zsearch-prefs-autodownload" control="zsearch-autodownload" class="zsearch-prefs-label" />
+        <checkbox id="zsearch-autodownload" preference="extensions.zotero.zsearch.autoDownloadPDF" />
+      </vbox>
+
+      <vbox class="zsearch-prefs-field">
+        <label data-l10n-id="zsearch-prefs-pagesize" control="zsearch-pagesize" class="zsearch-prefs-label" />
+        <html:input
+          id="zsearch-pagesize"
+          type="number"
+          min="5"
+          max="25"
+          preference="extensions.zotero.zsearch.pageSize"
+          class="zsearch-prefs-input zsearch-prefs-input-narrow"
+        />
+      </vbox>
+
+      <vbox class="zsearch-prefs-field">
+        <label data-l10n-id="zsearch-prefs-defaultsort" control="zsearch-defaultsort" class="zsearch-prefs-label" />
+        <menulist id="zsearch-defaultsort" preference="extensions.zotero.zsearch.defaultSort" class="zsearch-prefs-select">
+          <menupopup>
+            <menuitem value="" data-l10n-id="zsearch-filter-sort-relevance" />
+            <menuitem value="-citedby-count" data-l10n-id="zsearch-filter-sort-cited" />
+            <menuitem value="-coverDate" data-l10n-id="zsearch-filter-sort-date" />
+          </menupopup>
+        </menulist>
+      </vbox>
+    </groupbox>
+
+    <!-- ④ PDF 下载顺序 -->
+    <groupbox class="zsearch-prefs-section">
+      <label><html:h2 data-l10n-id="zsearch-prefs-section-pdf" /></label>
+      <label data-l10n-id="zsearch-prefs-pdf-order-help" class="zsearch-prefs-help" />
+      <vbox id="zsearch-pdf-order-list" class="zsearch-pdf-order-list">
+        <!-- 由 JS 动态生成 -->
+      </vbox>
+
+      <vbox class="zsearch-prefs-field">
+        <label data-l10n-id="zsearch-prefs-scihub-url" control="zsearch-scihub-url" class="zsearch-prefs-label" />
+        <html:input
+          id="zsearch-scihub-url"
+          type="text"
+          preference="extensions.zotero.zsearch.scihubUrl"
+          class="zsearch-prefs-input"
+        />
+        <label data-l10n-id="zsearch-prefs-scihub-url-help" class="zsearch-prefs-help" />
+        <label class="text-link zsearch-prefs-link" href="https://lovescihub.wordpress.com/" data-l10n-id="zsearch-prefs-apply-link" />
+      </vbox>
+    </groupbox>
+
+    <!-- ⑤ 网络与重试 -->
+    <groupbox class="zsearch-prefs-section">
+      <label><html:h2 data-l10n-id="zsearch-prefs-section-network" /></label>
+
+      <vbox class="zsearch-prefs-field">
+        <label data-l10n-id="zsearch-prefs-timeout" control="zsearch-timeout" class="zsearch-prefs-label" />
+        <html:input
+          id="zsearch-timeout"
+          type="number"
+          min="5000"
+          max="120000"
+          step="1000"
+          preference="extensions.zotero.zsearch.requestTimeout"
+          class="zsearch-prefs-input zsearch-prefs-input-narrow"
+        />
+      </vbox>
+
+      <vbox class="zsearch-prefs-field">
+        <label data-l10n-id="zsearch-prefs-retries" control="zsearch-retries" class="zsearch-prefs-label" />
+        <html:input
+          id="zsearch-retries"
+          type="number"
+          min="0"
+          max="10"
+          preference="extensions.zotero.zsearch.maxRetries"
+          class="zsearch-prefs-input zsearch-prefs-input-narrow"
+        />
+      </vbox>
+    </groupbox>
+
+    <!-- ⑥ 页脚 -->
+    <html:div class="zsearch-prefs-footer">
+      <html:label
+        data-l10n-id="zsearch-prefs-help"
+        data-l10n-args='{"name": "__addonName__","version": "__buildVersion__","time": "__buildTime__"}'
+      ></html:label>
+    </html:div>
+
+  </vbox>
+</prefpane>

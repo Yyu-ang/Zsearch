@@ -258,6 +258,8 @@ export interface ImportOptions {
   collectionID?: number;
   withAbstract?: boolean; // fetch Abstract API for full authors + abstract
   autoPDF?: boolean;
+  /** 翻译后的标题；若提供则覆盖原标题写入 Zotero 条目的 title 字段 */
+  translatedTitle?: string;
 }
 
 export interface ImportResult {
@@ -323,7 +325,8 @@ export async function importEntry(
 
   const item = new Zotero.Item(itemType as any);
 
-  const title = abstractData?.title || entry.title;
+  // 优先使用翻译后的标题（若调用方提供），否则用 Abstract API 富化的标题，最后回退到 entry.title
+  const title = opts.translatedTitle || abstractData?.title || entry.title;
   if (title) item.setField("title", title);
 
   const authors = abstractData?.authors?.length

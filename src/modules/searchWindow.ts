@@ -15,14 +15,20 @@ import type { UnifiedEntry, SearchFilters as ISearchFilters, AnySearchSource, IS
 import {
   getAllSources,
   getActiveSource,
+  getActiveSourceId,
   setActiveSource,
   getSourceById,
   getWebSearchUrl,
   initSearchSources,
   aggregateSearch,
+  aggregateSearchMore,
   AGGREGATE_SOURCE_ID,
 } from "./searchSources";
 import { downloadPDFWithChain } from "./pdfDownloadChain";
+import {
+  isPDFTranslateAvailable,
+  translateTitle,
+} from "./translateClient";
 
 let searchWindowState: {
   win?: Window;
@@ -42,6 +48,16 @@ let searchWindowState: {
   rankFilter: Set<string>;
   /** 当前 refine 筛选（all/oa/cited50/...） */
   currentRefine: string;
+  /** 聚合搜索专用：当前已加载的页码（1 表示仅第 1 页） */
+  aggregatePage: number;
+  /** 聚合搜索专用：DOI 去重映射（加载更多时复用） */
+  aggregateByDoi?: Map<string, UnifiedEntry>;
+  /** 聚合搜索专用：标题去重映射（加载更多时复用） */
+  aggregateByTitle?: Map<string, UnifiedEntry>;
+  /** 当前搜索模式：single=单源搜索（含翻页），aggregate=聚合搜索 */
+  mode: "single" | "aggregate";
+  /** 聚合搜索专用：已查询过 rank 的期刊名集合（跨加载更多持久化，避免重复请求 EasyScholar） */
+  aggregateRankedJournals?: Set<string>;
 } | null = null;
 
 interface SearchFilters {
@@ -79,6 +95,11 @@ export function openSearchWindow(client: ElsevierClient): void {
     lastRanks: new Map(),
     rankFilter: new Set(),
     currentRefine: "all",
+    aggregatePage: 1,
+    aggregateByDoi: undefined,
+    aggregateByTitle: undefined,
+    mode: "single",
+    aggregateRankedJournals: undefined,
   };
 
   win.addEventListener("load", () => {
@@ -206,18 +227,14 @@ function initSearchWindow(win: Window, client: ElsevierClient): void {
   });
   importAllBtn.addEventListener("click", () => importAll(win, client));
 
-  // 高级搜索语法快捷按钮：点击在光标位置插入语法
-  const syntaxBtns = doc.querySelectorAll<HTMLButtonElement>(".zsearch-btn-syntax");
-  syntaxBtns.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const insert = btn.getAttribute("data-insert") || "";
-      insertSyntaxAtCursor(input, insert);
-      input.focus();
-    });
-  });
+  // 高级搜索语法快捷按钮：由 updateSyntaxBar 动态生成，点击在光标位置插入语法
+  // 初始时按当前选中源生成一次
+  const initialSourceId = readMenulistValue(doc, "#zsearch-source") || "scopus";
+  updateSyntaxBar(win, initialSourceId);
 
   // 结果二次筛选条：点击切换筛选条件，前端过滤当前页结果
-  const refineBtns = doc.querySelectorAll<HTMLButtonElement>(".zsearch-btn-chip");
+  // 仅绑定带 data-refine 属性的按钮（排除等级筛选按钮）
+  const refineBtns = doc.querySelectorAll<HTMLButtonElement>(".zsearch-btn-chip[data-refine]");
   refineBtns.forEach((btn) => {
     btn.addEventListener("click", () => {
       const refine = btn.getAttribute("data-refine") || "all";
@@ -227,6 +244,14 @@ function initSearchWindow(win: Window, client: ElsevierClient): void {
       applyRefine(win, refine);
     });
   });
+
+  // 期刊等级筛选按钮：点击切换面板
+  const rankFilterBtn = doc.querySelector("#zsearch-rankfilter-btn");
+  if (rankFilterBtn) {
+    rankFilterBtn.addEventListener("click", () => {
+      toggleRankFilterPanel(win);
+    });
+  }
 
   // 全选复选框：同步所有可见卡片的选中状态
   const selectAll = doc.querySelector("#zsearch-select-all") as HTMLInputElement;
@@ -320,6 +345,110 @@ function setStatus(doc: Document, text: string, kind?: "loading" | "error" | "in
 }
 
 /**
+ * 切换搜索进行中的 UI 状态：禁用/启用搜索按钮、翻页按钮、导入全部按钮、输入框、搜索源下拉框。
+ * 避免用户在搜索进行中重复触发操作或切换源导致状态污染。
+ */
+function setSearchingUI(doc: Document, searching: boolean): void {
+  const ids = [
+    "#zsearch-search-btn",
+    "#zsearch-prev",
+    "#zsearch-next",
+    "#zsearch-import-all",
+    "#zsearch-export-bibtex",
+    "#zsearch-export-ris",
+    "#zsearch-export-csv",
+  ];
+  ids.forEach((sel) => {
+    const btn = doc.querySelector(sel) as HTMLButtonElement;
+    if (btn) btn.disabled = searching;
+  });
+  const input = doc.querySelector("#zsearch-input") as HTMLInputElement;
+  if (input) input.disabled = searching;
+  // 搜索源下拉框也需禁用，避免搜索中切换源导致状态污染
+  const sourceML = doc.querySelector("#zsearch-source") as HTMLElement;
+  if (sourceML) {
+    if (searching) {
+      sourceML.setAttribute("disabled", "true");
+    } else {
+      sourceML.removeAttribute("disabled");
+    }
+  }
+}
+
+/**
+ * 切换搜索源时清理 UI 和状态：清空结果区、隐藏分页/批量栏/筛选栏、重置 refine/rank 筛选、
+ * 重置 mode 和聚合状态、恢复 prev/next 按钮原貌。
+ * 避免用户切换源后看到上一个源的结果和筛选状态产生混淆。
+ */
+function resetStateOnSourceChange(doc: Document, newSourceId: string): void {
+  const state = searchWindowState;
+  // 清空结果区
+  const resultsEl = doc.querySelector("#zsearch-results") as HTMLElement;
+  if (resultsEl) resultsEl.innerHTML = "";
+  // 隐藏分页栏、批量操作栏、筛选栏
+  (doc.querySelector("#zsearch-pagination") as HTMLElement)?.setAttribute("style", "display: none;");
+  (doc.querySelector("#zsearch-batch") as HTMLElement)?.setAttribute("style", "display: none;");
+  const refineEl = doc.querySelector("#zsearch-refine") as HTMLElement;
+  if (refineEl) refineEl.style.display = "none";
+  const rankPanel = doc.querySelector("#zsearch-rankfilter-panel") as HTMLElement;
+  if (rankPanel) rankPanel.style.display = "none";
+  // 清空状态栏
+  setStatus(doc, "");
+  // 重置状态
+  if (state) {
+    state.lastEntries = [];
+    state.total = 0;
+    state.lastQuery = "";
+    state.lastDurationMs = 0;
+    state.currentRefine = "all";
+    state.rankFilter.clear();
+    state.lastRanks = new Map();
+    state.mode = newSourceId === AGGREGATE_SOURCE_ID ? "aggregate" : "single";
+    state.aggregatePage = 1;
+    state.aggregateByDoi = undefined;
+    state.aggregateByTitle = undefined;
+    state.aggregateRankedJournals = undefined;
+  }
+  rankFilterMatchers.clear();
+  // 重置 refine 按钮 active 状态到 "All"
+  const refineBtns = doc.querySelectorAll<HTMLButtonElement>(".zsearch-btn-chip[data-refine]");
+  refineBtns.forEach((b) => b.classList.remove("zsearch-refine-active"));
+  const allBtn = doc.querySelector<HTMLButtonElement>('.zsearch-btn-chip[data-refine="all"]');
+  if (allBtn) allBtn.classList.add("zsearch-refine-active");
+  // 取消等级筛选面板中所有复选框的勾选
+  const rankCheckboxes = doc.querySelectorAll<HTMLInputElement>(".zsearch-rankfilter-checkbox");
+  rankCheckboxes.forEach((cb) => { cb.checked = false; });
+  updateRankFilterButton(doc.defaultView as Window);
+  // 重置全选复选框
+  const selectAll = doc.querySelector("#zsearch-select-all") as HTMLInputElement;
+  if (selectAll) selectAll.checked = false;
+  // 恢复 prev/next 按钮原貌（移除可能被 updateAggregatePagination 绑定的 loadMoreAggregate 监听器）
+  resetPaginationButtons(doc);
+  // 重新计算滚动容器高度
+  updateResultsScrollHeight(doc.defaultView as Window);
+}
+
+/**
+ * 恢复 prev/next 按钮的原貌：显示、文本、监听器。
+ * 聚合搜索的 updateAggregatePagination 会用 cloneNode 替换 next 按钮并绑定 loadMoreAggregate，
+ * 切换回单源或新搜索时需重置监听器，否则单源翻页会错误触发 loadMoreAggregate。
+ */
+function resetPaginationButtons(doc: Document): void {
+  const prevBtn = doc.querySelector("#zsearch-prev") as HTMLButtonElement;
+  const nextBtn = doc.querySelector("#zsearch-next") as HTMLButtonElement;
+  if (prevBtn) {
+    prevBtn.style.display = "";
+    prevBtn.textContent = "‹ Prev";
+    prevBtn.disabled = true;
+  }
+  if (nextBtn) {
+    nextBtn.textContent = "Next ›";
+    nextBtn.style.display = "";
+    nextBtn.disabled = true;
+  }
+}
+
+/**
  * 在窗口右下角显示 toast 通知，3 秒后自动消失。
  * 替代 alert()，不打断用户操作。
  */
@@ -329,8 +458,9 @@ function showToast(win: Window, text: string, kind: "success" | "error" | "info"
   if (!container) {
     container = doc.createElement("div");
     container.id = "zsearch-toast-container";
+    // z-index 必须高于 modal overlay（10000），否则 toast 会被模态弹窗遮挡
     container.style.cssText =
-      "position: fixed; bottom: 16px; right: 16px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; pointer-events: none;";
+      "position: fixed; bottom: 16px; right: 16px; z-index: 10001; display: flex; flex-direction: column; gap: 8px; pointer-events: none; max-height: 60vh; overflow: hidden;";
     doc.body.appendChild(container);
   }
   const toast = doc.createElement("div");
@@ -347,6 +477,10 @@ function showToast(win: Window, text: string, kind: "success" | "error" | "info"
   toast.style.cssText =
     `pointer-events: auto; padding: 10px 16px; border-radius: 8px; font-size: 13px; color: ${colors[kind]}; background: ${bgs[kind]}; border: 1px solid ${colors[kind]}33; box-shadow: 0 2px 8px rgba(0,0,0,0.15); max-width: 360px; word-break: break-word; transition: opacity 0.3s, transform 0.3s; opacity: 0; transform: translateY(10px);`;
   toast.textContent = text;
+  // 限制容器内最多 5 个 toast，超出时移除最旧的
+  while (container.children.length >= 5) {
+    container.firstChild?.remove();
+  }
   container.appendChild(toast);
   // 触发入场动画
   requestAnimationFrame(() => {
@@ -395,27 +529,67 @@ function copyToClipboard(win: Window, text: string): boolean {
  * 用于在结果卡片上标记"已在库中"，避免重复导入。
  */
 function isEntryInLibrary(entry: UnifiedEntry): boolean {
-  if (!entry.doi) return false;
-  try {
-    const doi = entry.doi.toLowerCase().trim();
-    // Zotero 7+ 在 itemDataValues 表中有专门的 DOI 字段，优先精确匹配
-    // 使用 = 而非 LIKE，避免 "10.1016/j.tust.2023.105734" 误匹配 "10.1016/j.tust.2023.1057345"
-    let rows: any[] | null = null;
+  // 规范化 DOI：去除 URL 前缀、转小写
+  const normalizeDoiStr = (s: string): string => {
+    return s.trim().toLowerCase()
+      .replace(/^https?:\/\/doi\.org\//i, "")
+      .replace(/^doi:\s*/i, "");
+  };
+
+  // 1. 优先按 DOI 检测（最准确）
+  if (entry.doi) {
     try {
-      // Zotero 7+ 路径：通过 itemDataValues 精确匹配
-      const sql7 = `SELECT idv.itemID FROM itemDataValues idv
-                    JOIN itemData id ON idv.valueID = id.valueID
-                    JOIN fields f ON id.fieldID = f.fieldID
-                    WHERE f.fieldName = 'DOI' AND LOWER(idv.value) = ?`;
-      rows = (Zotero as any).DB.query(sql7, [doi]);
+      const doi = normalizeDoiStr(entry.doi);
+      let rows: any[] | null = null;
+      try {
+        // Zotero 7+ 路径：通过 itemDataValues 精确匹配
+        const sql7 = `SELECT idv.itemID FROM itemDataValues idv
+                      JOIN itemData id ON idv.valueID = id.valueID
+                      JOIN fields f ON id.fieldID = f.fieldID
+                      WHERE f.fieldName = 'DOI' AND LOWER(idv.value) = ?`;
+        rows = (Zotero as any).DB.query(sql7, [doi]);
+      } catch {
+        /* fallthrough to legacy path */
+      }
+      if (rows && rows.length > 0) return true;
+      // 旧版路径：itemData.value 直接存储值
+      const sql = "SELECT itemID FROM itemData WHERE fieldID IN (SELECT fieldID FROM fields WHERE fieldName='DOI') AND LOWER(value) = ?";
+      rows = (Zotero as any).DB.query(sql, [doi]);
+      if (rows && rows.length > 0) return true;
     } catch {
-      /* fallthrough to legacy path */
+      /* fallthrough to title matching */
     }
-    if (rows && rows.length > 0) return true;
-    // 旧版路径：itemData.value 直接存储值
-    const sql = "SELECT itemID FROM itemData WHERE fieldID IN (SELECT fieldID FROM fields WHERE fieldName='DOI') AND LOWER(value) = ?";
-    rows = (Zotero as any).DB.query(sql, [doi]);
-    if (rows && rows.length > 0) return true;
+  }
+
+  // 2. 无 DOI 或 DOI 未命中：按标题匹配（适用于 arXiv/无 DOI 条目）
+  // 标题归一化：去标点、空格，仅保留字母数字
+  const normalizeTitle = (s: string): string => {
+    return (s || "").toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]/g, "");
+  };
+  const targetTitle = normalizeTitle(entry.title || "");
+  if (!targetTitle || targetTitle.length < 5) return false; // 标题太短不匹配，避免误判
+  try {
+    // 通过 Zotero.Search 按标题精确匹配（更可靠）
+    const s = new (Zotero as any).Search();
+    s.addCondition("title", "is", entry.title || "");
+    s.addCondition("noChildren", "true");
+    const ids = s.search();
+    if (ids && ids.length > 0) return true;
+    // 回退：LIKE 匹配（防止大小写/标点差异）
+    const s2 = new (Zotero as any).Search();
+    s2.addCondition("title", "contains", entry.title || "");
+    s2.addCondition("noChildren", "true");
+    const ids2 = s2.search();
+    if (ids2 && ids2.length > 0) {
+      // 二次校验：归一化比较，避免 contains 误判
+      for (const id of ids2) {
+        const item = (Zotero as any).Items.get(id);
+        if (item) {
+          const libTitle = normalizeTitle(item.getField("title") || "");
+          if (libTitle === targetTitle) return true;
+        }
+      }
+    }
     return false;
   } catch {
     return false;
@@ -619,13 +793,13 @@ function entryToZoteroItem(entry: UnifiedEntry): any {
   // 摘要
   if (entry.abstract) item.setField("abstractNote", entry.abstract);
 
-  // 文献类型映射
+  // 文献类型映射：统一使用 setType API（typeID 直接赋字符串不会生效）
   const subtype = (entry.subtype || "").toLowerCase();
-  if (entry.source === "arxiv" || subtype.includes("preprint")) {
-    item.typeID = "preprint";
-  } else if (subtype.includes("book") || entry.subtype === "bk") {
+  if (entry.source === "arxiv" || subtype === "preprint") {
+    item.setType("preprint");
+  } else if (subtype === "bk" || subtype === "book") {
     item.setType("book");
-  } else if (subtype.includes("conference") || entry.subtype === "cp") {
+  } else if (subtype === "cp" || subtype === "conference") {
     item.setType("conferencePaper");
   }
 
@@ -785,13 +959,13 @@ function showCitationDialog(win: Window, entry: UnifiedEntry): void {
   // 标题
   const title = doc.createElement("div");
   title.className = "zsearch-modal-title";
-  title.textContent = "引用格式预览";
+  title.textContent = getString("cite-dialog-title");
   modal.appendChild(title);
 
   // 说明
   const note = doc.createElement("div");
   note.className = "zsearch-modal-note";
-  note.textContent = "使用 Zotero 内置引用样式生成。如需更多样式，请在 Zotero 首选项 → 引用 → 样式管理器 中安装。";
+  note.textContent = getString("cite-dialog-note");
   modal.appendChild(note);
 
   // 条目标题
@@ -806,7 +980,7 @@ function showCitationDialog(win: Window, entry: UnifiedEntry): void {
 
   const styleLabel = doc.createElement("label");
   styleLabel.className = "zsearch-citation-style-label";
-  styleLabel.textContent = "引用样式:";
+  styleLabel.textContent = getString("cite-style-label");
   styleLabel.htmlFor = "zsearch-citation-style-select";
 
   const styleSelect = doc.createElement("select");
@@ -857,24 +1031,24 @@ function showCitationDialog(win: Window, entry: UnifiedEntry): void {
 
   const copyBtn = doc.createElement("button");
   copyBtn.className = "zsearch-btn zsearch-btn-secondary";
-  copyBtn.textContent = "复制";
+  copyBtn.textContent = getString("cite-copy");
   copyBtn.addEventListener("click", () => {
     const ok = copyToClipboard(win, textArea.textContent || "");
     copyBtn.textContent = ok ? "✓ 已复制" : "✗ 失败";
-    setTimeout(() => (copyBtn.textContent = "复制"), 1500);
+    setTimeout(() => (copyBtn.textContent = getString("cite-copy")), 1500);
   });
 
   // 生成引用的函数
   const updateCitation = () => {
     const styleId = styleSelect.value;
-    textArea.textContent = "正在生成...";
+    textArea.textContent = getString("cite-generating");
     // 异步执行避免阻塞下拉框关闭
     setTimeout(() => {
       try {
         const citation = generateZoteroCitation(entry, styleId);
         textArea.textContent = citation;
       } catch (e) {
-        textArea.textContent = `[生成错误: ${(e as Error).message}]`;
+        textArea.textContent = getString("cite-error", { args: { message: (e as Error).message } });
       }
     }, 0);
   };
@@ -886,7 +1060,7 @@ function showCitationDialog(win: Window, entry: UnifiedEntry): void {
 
   const closeBtn = doc.createElement("button");
   closeBtn.className = "zsearch-btn zsearch-btn-primary";
-  closeBtn.textContent = "关闭";
+  closeBtn.textContent = getString("cite-close");
   closeBtn.addEventListener("click", () => overlay.remove());
 
   btnRow.appendChild(copyBtn);
@@ -931,7 +1105,7 @@ function showStarredDialog(win: Window): void {
     const empty = doc.createElement("div");
     empty.className = "zsearch-stats-row";
     empty.style.cssText = "padding: 24px; text-align: center; color: #70757a;";
-    empty.textContent = "暂无收藏条目。点击结果卡片左侧的 ☆ 即可收藏。";
+    empty.textContent = getString("starred-empty");
     modal.appendChild(empty);
   } else {
     // 列表
@@ -967,7 +1141,7 @@ function showStarredDialog(win: Window): void {
       // 取消收藏按钮
       const removeBtn = doc.createElement("button");
       removeBtn.className = "zsearch-btn zsearch-btn-mini";
-      removeBtn.textContent = "移除";
+      removeBtn.textContent = getString("starred-remove");
       removeBtn.addEventListener("click", () => {
         const fakeEntry: UnifiedEntry = { source: "starred", title: item.title, doi: item.doi, url: item.url };
         toggleStarred(fakeEntry);
@@ -975,7 +1149,9 @@ function showStarredDialog(win: Window): void {
         // 更新标题计数
         const newList = getStarredEntries();
         title.textContent = `阅读队列（${newList.length} / ${STARRED_MAX}）`;
-        showToast(win, "已移除", "info");
+        // 同步刷新搜索结果卡片的星标状态
+        syncCardStarStates(win);
+        showToast(win, getString("toast-starred-remove"), "info");
       });
       row.appendChild(removeBtn);
       list.appendChild(row);
@@ -985,13 +1161,15 @@ function showStarredDialog(win: Window): void {
     // 清空全部按钮
     const clearBtn = doc.createElement("button");
     clearBtn.className = "zsearch-btn zsearch-btn-secondary";
-    clearBtn.textContent = "清空全部";
+    clearBtn.textContent = getString("starred-clear");
     clearBtn.style.marginRight = "8px";
     clearBtn.addEventListener("click", () => {
       if (confirm("确定要清空所有收藏吗？")) {
         setPref("starredEntries", "[]");
         title.textContent = `阅读队列（0 / ${STARRED_MAX}）`;
         list.innerHTML = "";
+        // 同步刷新搜索结果卡片的星标状态（清空后所有卡片星标应变为未收藏）
+        syncCardStarStates(win);
         showToast(win, "已清空阅读队列", "info");
       }
     });
@@ -1001,7 +1179,7 @@ function showStarredDialog(win: Window): void {
   // 关闭按钮
   const closeBtn = doc.createElement("button");
   closeBtn.className = "zsearch-btn zsearch-btn-secondary";
-  closeBtn.textContent = "关闭";
+  closeBtn.textContent = getString("cite-close");
   closeBtn.addEventListener("click", () => overlay.remove());
   modal.appendChild(closeBtn);
 
@@ -1108,7 +1286,7 @@ function showStatsDialog(win: Window): void {
   yearSection.className = "zsearch-stats-section";
   const yearTitle = doc.createElement("div");
   yearTitle.className = "zsearch-stats-section-title";
-  yearTitle.textContent = "年份分布";
+  yearTitle.textContent = getString("stats-year-title");
   yearSection.appendChild(yearTitle);
 
   const sortedYears = Array.from(yearDist.entries()).sort((a, b) => b[0].localeCompare(a[0]));
@@ -1137,7 +1315,7 @@ function showStatsDialog(win: Window): void {
   citedSection.className = "zsearch-stats-section";
   const citedTitle = doc.createElement("div");
   citedTitle.className = "zsearch-stats-section-title";
-  citedTitle.textContent = "被引次数分布";
+  citedTitle.textContent = getString("stats-cited-title");
   citedSection.appendChild(citedTitle);
   const maxCitedCount = Math.max(...Object.values(citedBuckets), 1);
   for (const [label, count] of Object.entries(citedBuckets)) {
@@ -1162,7 +1340,7 @@ function showStatsDialog(win: Window): void {
   // 关闭按钮
   const closeBtn = doc.createElement("button");
   closeBtn.className = "zsearch-btn zsearch-btn-secondary";
-  closeBtn.textContent = "关闭";
+  closeBtn.textContent = getString("stats-close");
   closeBtn.addEventListener("click", () => overlay.remove());
   modal.appendChild(closeBtn);
 
@@ -1425,6 +1603,109 @@ function setMenulistValue(doc: Document, selector: string, value: string): void 
   }
 }
 
+/** 各搜索源的高级语法快捷按钮配置 */
+const SYNTAX_BUTTONS: Record<string, Array<{ label: string; insert: string }>> = {
+  scopus: [
+    { label: "title", insert: "TITLE-ABS-KEY()" },
+    { label: "author", insert: "AUTHOR-NAME()" },
+    { label: "affil", insert: "AFFIL()" },
+    { label: "year", insert: "PUBYEAR > 2020" },
+    { label: "AND", insert: " AND " },
+    { label: "OR", insert: " OR " },
+    { label: "NOT", insert: " NOT " },
+    { label: "ar", insert: 'LIMIT-TO(DOCTYPE,"ar")' },
+    { label: "oa", insert: 'LIMIT-TO(OA,"all")' },
+  ],
+  pubmed: [
+    { label: "tiab", insert: "[tiab]" },
+    { label: "au", insert: "[au]" },
+    { label: "dp", insert: "[dp]" },
+    { label: "AND", insert: " AND " },
+    { label: "OR", insert: " OR " },
+    { label: "NOT", insert: " NOT " },
+  ],
+  arxiv: [
+    { label: "ti:", insert: "ti:" },
+    { label: "au:", insert: "au:" },
+    { label: "abs:", insert: "abs:" },
+    { label: "cat:", insert: "cat:" },
+    { label: "AND", insert: " AND " },
+    { label: "OR", insert: " OR " },
+    { label: "ANDNOT", insert: " ANDNOT " },
+  ],
+  ieee: [
+    { label: "AND", insert: " AND " },
+    { label: "OR", insert: " OR " },
+    { label: "NOT", insert: " NOT " },
+  ],
+  semanticscholar: [
+    { label: "AND", insert: " AND " },
+    { label: "OR", insert: " OR " },
+  ],
+  springer: [
+    { label: "keyword", insert: "keyword:" },
+    { label: "doi", insert: "doi:" },
+    { label: "year", insert: "year:" },
+    { label: "type", insert: "type:" },
+    { label: "AND", insert: " AND " },
+    { label: "OR", insert: " OR " },
+  ],
+  googleScholar: [
+    // Google Scholar 仅支持自由文本，无特殊语法
+  ],
+  google: [],
+  researchgate: [],
+  jstor: [],
+};
+
+/**
+ * 按当前搜索源更新语法快捷按钮。
+ * 在语法栏的 label 和 divider 之间动态插入按钮。
+ */
+function updateSyntaxBar(win: Window, sourceId: string): void {
+  const doc = win.document;
+  const bar = doc.querySelector("#zsearch-syntax-bar");
+  if (!bar) return;
+
+  // 找到语法标签和分隔符之间的区域，清空后重新插入按钮
+  const label = bar.querySelector(".zsearch-syntax-label");
+  const divider = bar.querySelector(".zsearch-filter-divider");
+  if (!label || !divider) return;
+
+  // 移除旧的动态按钮（label 之后、divider 之前的所有 .zsearch-btn-syntax）
+  let node = label.nextSibling;
+  while (node && node !== divider) {
+    const next = node.nextSibling;
+    bar.removeChild(node);
+    node = next;
+  }
+
+  // 获取当前源的语法按钮配置
+  const buttons = SYNTAX_BUTTONS[sourceId] || [];
+  if (buttons.length === 0) {
+    // 无语法按钮时，在 label 后显示提示文字
+    const hint = doc.createElement("span");
+    hint.className = "zsearch-syntax-hint";
+    hint.textContent = "(自由文本搜索)";
+    hint.style.cssText = "font-size: 12px; color: #5f6368; margin-left: 4px;";
+    bar.insertBefore(hint, divider);
+    return;
+  }
+
+  const input = doc.querySelector("#zsearch-input") as HTMLInputElement;
+  for (const opt of buttons) {
+    const btn = doc.createElement("button");
+    btn.className = "zsearch-btn zsearch-btn-syntax";
+    btn.setAttribute("data-insert", opt.insert);
+    btn.textContent = `{${opt.label}}`;
+    btn.addEventListener("click", () => {
+      insertSyntaxAtCursor(input, opt.insert);
+      input.focus();
+    });
+    bar.insertBefore(btn, divider);
+  }
+}
+
 /**
  * 创建搜索源下拉选择器。
  * 包含所有 API 源（可返回结构化结果）和 Web 源（浏览器跳转）。
@@ -1437,8 +1718,9 @@ function createSourceMenulist(doc: Document): void {
   }
 
   const sources = getAllSources();
-  const activeSource = getActiveSource();
-  const activeId = activeSource?.id || "scopus";
+  // 优先使用 getActiveSourceId 读取 pref（支持虚拟的 aggregate 源），
+  // 若 pref 中是实际源 ID，则回退到 getActiveSource
+  const activeId = getActiveSourceId();
 
   const options: Array<{ value: string; label: string }> = [
     // 聚合搜索放在首位
@@ -1456,8 +1738,17 @@ function createSourceMenulist(doc: Document): void {
     ml.addEventListener("command", () => {
       const val = readMenulistValue(doc, "#zsearch-source");
       if (val) {
+        // 搜索进行中不允许切换源（防止状态污染）
+        if (searchWindowState?.searching) {
+          log.search.warn("Cannot switch source while searching");
+          return;
+        }
         setActiveSource(val);
         log.search.info(`Search source switched to: ${val}`);
+        // 切换源时清理上次搜索的状态和 UI（结果区、分页栏、refine/rank 筛选等）
+        resetStateOnSourceChange(doc, val);
+        // 切换源时更新语法栏
+        updateSyntaxBar(doc.defaultView as Window, val);
       }
     });
   }
@@ -1499,30 +1790,75 @@ async function doSearch(win: Window, client: ElsevierClient, page: number): Prom
     const state = searchWindowState!;
     state.lastQuery = keywords;
     addSearchHistory(keywords);
-    state.lastFilters = filters;
-    state.currentPage = page;
     state.searching = true;
+    setSearchingUI(doc, true);
+    state.lastFilters = filters;
+    state.currentPage = 1;
 
-    setStatus(doc, "🔀 聚合搜索中…", "loading");
+    setStatus(doc, "🔀 聚合搜索中… (0/?)", "loading");
     const resultsEl = doc.querySelector("#zsearch-results") as HTMLElement;
     resultsEl.innerHTML = "";
     (doc.querySelector("#zsearch-pagination") as HTMLElement).style.display = "none";
     (doc.querySelector("#zsearch-batch") as HTMLElement).style.display = "none";
+    const refineEl0 = doc.querySelector("#zsearch-refine") as HTMLElement;
+    if (refineEl0) refineEl0.style.display = "none";
+
+    // 重置聚合状态
+    state.aggregatePage = 1;
+    state.aggregateByDoi = undefined;
+    state.aggregateByTitle = undefined;
+    state.mode = "aggregate";
+    // 初始化 rankedJournals 集合（跨加载更多持久化，避免重复请求 EasyScholar）
+    state.aggregateRankedJournals = new Set<string>();
 
     const t0 = Date.now();
     try {
-      // 聚合搜索仅第 1 页有意义（各源仅取第 1 页）
-      const result = await aggregateSearch(keywords, filters, state.pageSize);
-      state.total = result.total;
+      // 聚合搜索：流式合并，每源完成即渲染
+      const result = await aggregateSearch(
+        keywords,
+        filters,
+        state.pageSize,
+        (done, total, srcId, count) => {
+          setStatus(doc, `🔀 聚合搜索中… (${done}/${total}) ${srcId}: +${count}条`, "loading");
+        },
+        (allMerged, newCount, doneSources, totalSources) => {
+          // 流式增量渲染：每源完成即更新结果列表
+          state.lastEntries = allMerged;
+          state.total = allMerged.length;
+          const elapsedMs = Date.now() - t0;
+          renderResults(win, client, allMerged, allMerged.length, 1, elapsedMs);
+          updateAggregatePagination(win, state);
+          updateResultsScrollHeight(win);
+          // 异步查询新增条目的期刊等级（仅查新条目，避免重复请求）
+          if (newCount > 0) {
+            const newEntries = allMerged.slice(allMerged.length - newCount);
+            void fetchAndApplyRanksIncremental(win, newEntries, state.aggregateRankedJournals!);
+          }
+        },
+        (byDoi, byTitle) => {
+          // 保存去重映射供加载更多使用
+          state.aggregateByDoi = byDoi;
+          state.aggregateByTitle = byTitle;
+        },
+      );
+      state.total = result.entries.length;
       state.lastEntries = result.entries;
       state.lastDurationMs = Date.now() - t0;
       state.searching = false;
+      setSearchingUI(doc, false);
 
-      renderResults(win, client, result.entries, result.total, 1, state.lastDurationMs);
+      // 最终渲染
+      renderResults(win, client, result.entries, result.entries.length, 1, state.lastDurationMs);
+      updateAggregatePagination(win, state);
       updateResultsScrollHeight(win);
+      // 最终再补查一次 rank（覆盖之前失败的）
       void fetchAndApplyRanks(win, result.entries);
     } catch (e) {
       state.searching = false;
+      setSearchingUI(doc, false);
+      // 搜索失败时清空 lastEntries，避免统计面板显示陈旧数据
+      state.lastEntries = [];
+      state.total = 0;
       log.search.error("aggregate search failed", e);
       showSearchError(doc, e, { source: "aggregate", keywords, page });
     }
@@ -1540,6 +1876,10 @@ async function doSearch(win: Window, client: ElsevierClient, page: number): Prom
     const webSrc = source as WebSearchSource;
     const url = getWebSearchUrl(webSrc, keywords);
     log.search.info(`Opening web search: ${webSrc.id} -> ${url}`);
+    // 清理上次搜索的状态和 UI（避免显示旧源结果，让用户误以为是当前源的结果）
+    resetStateOnSourceChange(doc, sourceId);
+    // Web 源搜索也记录到历史
+    addSearchHistory(keywords);
     openInBrowser(url);
     setStatus(doc, `Opened in browser: ${webSrc.name}`, "info");
     return;
@@ -1561,6 +1901,13 @@ async function doSearch(win: Window, client: ElsevierClient, page: number): Prom
   state.lastFilters = filters;
   state.currentPage = page;
   state.searching = true;
+  setSearchingUI(doc, true);
+
+  // 重置聚合状态：切回单源模式，恢复 prev/next 按钮原貌
+  state.mode = "single";
+  state.aggregatePage = 1;
+  state.aggregateByDoi = undefined;
+  state.aggregateByTitle = undefined;
 
   setStatus(doc, getString("searching"), "loading");
   // Clear previous results
@@ -1568,6 +1915,8 @@ async function doSearch(win: Window, client: ElsevierClient, page: number): Prom
   resultsEl.innerHTML = "";
   (doc.querySelector("#zsearch-pagination") as HTMLElement).style.display = "none";
   (doc.querySelector("#zsearch-batch") as HTMLElement).style.display = "none";
+  const refineElPre = doc.querySelector("#zsearch-refine") as HTMLElement;
+  if (refineElPre) refineElPre.style.display = "none";
 
   const t0 = Date.now();
 
@@ -1577,9 +1926,11 @@ async function doSearch(win: Window, client: ElsevierClient, page: number): Prom
     state.lastEntries = result.entries;
     state.lastDurationMs = Date.now() - t0;
     state.searching = false;
+    setSearchingUI(doc, false);
 
-    // 立即渲染结果卡片
-    renderResults(win, client, result.entries, result.total, page, state.lastDurationMs);
+    // 立即渲染结果卡片（翻页时保留 refine/rank 筛选）
+    const isPaging = page > 1;
+    renderResults(win, client, result.entries, result.total, page, state.lastDurationMs, isPaging);
 
     // 渲染后重新计算滚动容器高度
     updateResultsScrollHeight(win);
@@ -1588,6 +1939,13 @@ async function doSearch(win: Window, client: ElsevierClient, page: number): Prom
     void fetchAndApplyRanks(win, result.entries);
   } catch (e) {
     state.searching = false;
+    setSearchingUI(doc, false);
+    // 搜索失败时清空 lastEntries（仅新搜索失败时），避免统计面板显示陈旧数据
+    // 翻页失败时保留旧结果，用户仍可查看
+    if (page === 1) {
+      state.lastEntries = [];
+      state.total = 0;
+    }
     log.search.error("search failed", e);
     showSearchError(doc, e, { source: sourceId, keywords, page });
   }
@@ -1619,6 +1977,46 @@ async function fetchAndApplyRanks(win: Window, entries: UnifiedEntry[]): Promise
     applyRanksToCards(win, entries, ranksMap);
   } catch (e) {
     log.search.warn("fetchAndApplyRanks failed", e);
+  }
+}
+
+/**
+ * 流式聚合搜索的增量 rank 查询：仅查询未查过的期刊名。
+ * 避免每次 onBatch 都重复查询所有期刊。
+ * @param rankedJournals 已查过的期刊名集合（会被此函数更新）
+ */
+async function fetchAndApplyRanksIncremental(
+  win: Window,
+  newEntries: UnifiedEntry[],
+  rankedJournals: Set<string>,
+): Promise<void> {
+  const state = searchWindowState;
+  if (!state) return;
+  const easyScholar = state.easyScholar;
+  if (!easyScholar.hasApiKey()) return;
+
+  // 仅查询未查过的期刊名
+  const names = newEntries
+    .map((e) => e.publicationName)
+    .filter((n): n is string => Boolean(n && n.trim()))
+    .filter((n) => !rankedJournals.has(n));
+  if (names.length === 0) return;
+
+  // 标记为已查
+  names.forEach((n) => rankedJournals.add(n));
+
+  log.search.info(`fetchAndApplyRanksIncremental: ${names.length} new journals to query`);
+  try {
+    const ranksMap = await easyScholar.getRanksBatch(names);
+    // 合并到 lastRanks
+    if (state.lastRanks) {
+      for (const [k, v] of ranksMap) state.lastRanks.set(k, v);
+    } else {
+      state.lastRanks = ranksMap;
+    }
+    applyRanksToCards(win, newEntries, ranksMap);
+  } catch (e) {
+    log.search.warn("fetchAndApplyRanksIncremental failed", e);
   }
 }
 
@@ -1662,6 +2060,11 @@ function applyRanksToCards(
     applied++;
   }
   log.search.info(`applyRanksToCards: applied badges to ${applied}/${entries.length} cards`);
+
+  // 徽章插入后若当前有 rank 筛选条件，需重新应用筛选以更新可见性
+  if (searchWindowState?.rankFilter && searchWindowState.rankFilter.size > 0) {
+    applyFilters(win);
+  }
 }
 
 /**
@@ -1742,7 +2145,7 @@ function showSearchError(
   const toggle = doc.createElement("a");
   toggle.className = "zsearch-error-toggle";
   toggle.href = "#";
-  toggle.textContent = "详情";
+  toggle.textContent = getString("result-detail");
   toggle.style.cssText =
     "margin-left: 12px; color: #1a73e8; cursor: pointer; font-size: 12px; text-decoration: none;";
   el.appendChild(toggle);
@@ -1779,6 +2182,242 @@ function showAPIKeyError(doc: Document): void {
   setStatus(doc, getString("err-no-apikey"), "error");
 }
 
+/**
+ * 聚合搜索专用分页栏：显示"加载更多"按钮和当前条目数。
+ * 聚合搜索不使用传统翻页，而是通过"加载更多"拉取各源下一页。
+ */
+function updateAggregatePagination(win: Window, state: NonNullable<typeof searchWindowState>): void {
+  const doc = win.document;
+  const pagination = doc.querySelector("#zsearch-pagination") as HTMLElement;
+  if (!pagination) return;
+  pagination.style.display = "flex";
+
+  // 隐藏 prev 按钮，显示"加载更多"按钮和页码信息
+  const prevBtn = doc.querySelector("#zsearch-prev") as HTMLButtonElement;
+  if (prevBtn) prevBtn.style.display = "none";
+
+  // 页码信息显示当前条目数和已加载页数
+  const pageInfo = doc.querySelector("#zsearch-page-info") as HTMLElement;
+  if (pageInfo) {
+    pageInfo.textContent = `共 ${state.total} 条 (第 ${state.aggregatePage} 页)`;
+  }
+
+  // next 按钮改为"加载更多"
+  const nextBtn = doc.querySelector("#zsearch-next") as HTMLButtonElement;
+  if (nextBtn) {
+    nextBtn.textContent = getString("load-more");
+    nextBtn.style.display = "";
+    nextBtn.disabled = state.searching;
+    // 移除原有 click 监听（通过克隆节点）
+    const newNext = nextBtn.cloneNode(true) as HTMLButtonElement;
+    nextBtn.parentNode?.replaceChild(newNext, nextBtn);
+    newNext.addEventListener("click", () => loadMoreAggregate(win, state.elsevierClient));
+  }
+}
+
+/**
+ * 在结果列表末尾显示加载占位符（spinner + 提示文字）。
+ * 加载更多时调用，让用户直观看到"正在加载"而不跳动已有卡片。
+ */
+function showLoadMorePlaceholder(win: Window, text: string = "加载中…"): HTMLElement | null {
+  const doc = win.document;
+  const resultsEl = doc.querySelector("#zsearch-results") as HTMLElement;
+  if (!resultsEl) return null;
+  // 已存在则先移除
+  const existing = resultsEl.querySelector("#zsearch-loadmore-placeholder");
+  if (existing) existing.remove();
+  const placeholder = doc.createElement("div");
+  placeholder.id = "zsearch-loadmore-placeholder";
+  placeholder.className = "zsearch-loadmore-placeholder";
+  placeholder.style.cssText =
+    "display: flex; align-items: center; justify-content: center; gap: 10px; padding: 18px 12px; color: #5f6368; font-size: 13px; border-top: 1px dashed rgba(0,0,0,0.1);";
+  const spinner = doc.createElement("span");
+  spinner.className = "zsearch-spinner";
+  placeholder.appendChild(spinner);
+  const textEl = doc.createElement("span");
+  textEl.textContent = text;
+  placeholder.appendChild(textEl);
+  resultsEl.appendChild(placeholder);
+  return placeholder;
+}
+
+/**
+ * 更新加载占位符的文字。
+ */
+function updateLoadMorePlaceholder(win: Window, text: string): void {
+  const doc = win.document;
+  const placeholder = doc.querySelector("#zsearch-loadmore-placeholder");
+  if (!placeholder) return;
+  const textEl = placeholder.querySelector("span:last-child");
+  if (textEl) textEl.textContent = text;
+}
+
+/**
+ * 移除加载占位符。
+ */
+function removeLoadMorePlaceholder(win: Window): void {
+  const doc = win.document;
+  const placeholder = doc.querySelector("#zsearch-loadmore-placeholder");
+  if (placeholder) placeholder.remove();
+}
+
+/**
+ * 增量追加新卡片到结果列表末尾（不重建已有卡片，保持用户滚动位置）。
+ * 用于"加载更多"流程：每源完成即追加新增条目，加载占位符始终位于末尾。
+ * @param win 窗口
+ * @param client Elsevier 客户端
+ * @param allEntries 合并后的全量条目（用于计算 data-idx）
+ * @param prevCount 追加前已有的条目数（新条目从 prevCount 开始）
+ * @returns 新追加的卡片数
+ */
+function appendResultCards(
+  win: Window,
+  client: ElsevierClient,
+  allEntries: UnifiedEntry[],
+  prevCount: number,
+): number {
+  const doc = win.document;
+  const resultsEl = doc.querySelector("#zsearch-results") as HTMLElement;
+  if (!resultsEl) return 0;
+
+  // 保留用户已勾选的复选框状态（通过 DOI/sourceId/title 标识）
+  const selectedIds = new Set<string>();
+  const oldCheckboxes = doc.querySelectorAll<HTMLInputElement>(".zsearch-result-checkbox");
+  oldCheckboxes.forEach((cb) => {
+    if (!cb.checked) return;
+    const card = cb.closest(".zsearch-result") as HTMLElement | null;
+    if (!card) return;
+    const cardIdx = Number(card.getAttribute("data-idx") || "-1");
+    const oldEntries = searchWindowState?.lastEntries || [];
+    const entry = cardIdx >= 0 ? oldEntries[cardIdx] : undefined;
+    if (entry) {
+      const id = entry.doi || entry.sourceId || entry.title || "";
+      if (id) selectedIds.add(id);
+    }
+  });
+
+  // 取出新增条目（从 prevCount 到 allEntries.length）
+  const newEntries = allEntries.slice(prevCount);
+  if (newEntries.length === 0) return 0;
+
+  // 加载占位符（若存在）需在追加后重新放到末尾
+  const placeholder = resultsEl.querySelector("#zsearch-loadmore-placeholder");
+
+  // 为每个新条目创建卡片并插入到占位符之前
+  for (let i = 0; i < newEntries.length; i++) {
+    const entry = newEntries[i];
+    const idx = prevCount + i; // 在 allEntries 中的全局索引
+    const card = buildResultCard(win, client, entry, idx);
+    // 恢复选中状态
+    const id = entry.doi || entry.sourceId || entry.title || "";
+    if (id && selectedIds.has(id)) {
+      const cb = card.querySelector<HTMLInputElement>(".zsearch-result-checkbox");
+      if (cb) cb.checked = true;
+    }
+    if (placeholder) {
+      placeholder.parentNode?.insertBefore(card, placeholder);
+    } else {
+      resultsEl.appendChild(card);
+    }
+  }
+
+  // 新卡片追加后应用当前筛选条件（让新卡片也遵循 refine/rank 筛选）
+  applyFilters(win);
+
+  return newEntries.length;
+}
+
+/**
+ * 聚合搜索"加载更多"：拉取各源下一页并合并到现有结果。
+ * 关键：增量追加新卡片，不调用 renderResults 全量重建，保持用户滚动位置。
+ */
+async function loadMoreAggregate(win: Window, client: ElsevierClient): Promise<void> {
+  const state = searchWindowState;
+  if (!state || state.searching) return;
+  if (!state.aggregateByDoi || !state.aggregateByTitle) {
+    log.search.warn("loadMoreAggregate: 去重映射未初始化");
+    return;
+  }
+  if (!state.lastQuery) return;
+
+  const doc = win.document;
+  state.searching = true;
+  setSearchingUI(doc, true);
+  state.aggregatePage += 1;
+  const nextPage = state.aggregatePage;
+  const t0 = Date.now();
+
+  // 记录追加前的条目数（用于增量追加）
+  let prevCount = state.lastEntries.length;
+
+  // 显示加载占位符并更新状态栏
+  showLoadMorePlaceholder(win, `🔀 加载更多… (0/?) 第 ${nextPage} 页`);
+  setStatus(doc, `🔀 加载更多… (0/?) 第 ${nextPage} 页`, "loading");
+  // 确保"加载更多"按钮在加载期间禁用
+  const nextBtn = doc.querySelector("#zsearch-next") as HTMLButtonElement;
+  if (nextBtn) nextBtn.disabled = true;
+
+  // 复用 state 中的 rankedJournals 集合（跨加载更多持久化，避免重复请求 EasyScholar）
+  if (!state.aggregateRankedJournals) state.aggregateRankedJournals = new Set<string>();
+  try {
+    const result = await aggregateSearchMore(
+      state.lastQuery,
+      state.lastFilters,
+      state.pageSize,
+      nextPage,
+      state.lastEntries,
+      state.aggregateByDoi,
+      state.aggregateByTitle,
+      (done, total, srcId, count) => {
+        const progressText = `🔀 加载更多… (${done}/${total}) ${srcId}: +${count}条`;
+        setStatus(doc, progressText, "loading");
+        updateLoadMorePlaceholder(win, progressText);
+      },
+      (allMerged, newCount, doneSources, totalSources) => {
+        // 流式增量追加：仅追加新增条目，不重建已有卡片
+        state.lastEntries = allMerged;
+        state.total = allMerged.length;
+        const appended = appendResultCards(win, client, allMerged, prevCount);
+        if (appended > 0) prevCount = allMerged.length;
+        // 更新分页信息（条目数和页码）
+        const pageInfo = doc.querySelector("#zsearch-page-info") as HTMLElement;
+        if (pageInfo) {
+          pageInfo.textContent = `共 ${state.total} 条 (第 ${state.aggregatePage} 页)`;
+        }
+        // 异步查询新增条目的期刊等级（仅查新条目，避免重复请求）
+        if (appended > 0) {
+          const newEntries = allMerged.slice(allMerged.length - appended);
+          void fetchAndApplyRanksIncremental(win, newEntries, state.aggregateRankedJournals!);
+        }
+      },
+    );
+    state.total = result.entries.length;
+    state.lastEntries = result.entries;
+    state.lastDurationMs = Date.now() - t0;
+    state.searching = false;
+    setSearchingUI(doc, false);
+
+    // 移除加载占位符
+    removeLoadMorePlaceholder(win);
+    // 更新状态栏显示最终结果数和耗时
+    const seconds = (state.lastDurationMs / 1000).toFixed(2);
+    setStatus(
+      doc,
+      getString("results-count", { args: { total: String(state.total), seconds } }),
+      "info",
+    );
+    updateAggregatePagination(win, state);
+    updateResultsScrollHeight(win);
+  } catch (e) {
+    state.searching = false;
+    setSearchingUI(doc, false);
+    state.aggregatePage -= 1; // 回退页码
+    removeLoadMorePlaceholder(win);
+    log.search.error("loadMoreAggregate failed", e);
+    setStatus(doc, `加载更多失败: ${(e as Error).message}`, "error");
+  }
+}
+
 function renderResults(
   win: Window,
   client: ElsevierClient,
@@ -1786,12 +2425,47 @@ function renderResults(
   total: number,
   page: number,
   durationMs: number,
+  preserveFilters: boolean = false,
 ): void {
   const doc = win.document;
   const resultsEl = doc.querySelector("#zsearch-results") as HTMLElement;
 
+  // 加载更多时：保留用户已勾选的复选框状态（通过 entry 的 sourceId 或 DOI 标识）
+  // 避免用户选中几条准备导出后，点击"加载更多"丢失选择
+  const selectedSourceIds = new Set<string>();
+  if (preserveFilters) {
+    const oldCheckboxes = doc.querySelectorAll<HTMLInputElement>(".zsearch-result-checkbox");
+    oldCheckboxes.forEach((cb) => {
+      if (!cb.checked) return;
+      const card = cb.closest(".zsearch-result") as HTMLElement | null;
+      if (!card) return;
+      const cardIdx = Number(card.getAttribute("data-idx") || "-1");
+      const oldEntries = searchWindowState?.lastEntries || [];
+      const entry = cardIdx >= 0 ? oldEntries[cardIdx] : undefined;
+      if (entry) {
+        const id = entry.doi || entry.sourceId || entry.title || "";
+        if (id) selectedSourceIds.add(id);
+      }
+    });
+  }
+
+  // 清空容器：避免聚合搜索流式渲染时重复追加卡片
+  resultsEl.innerHTML = "";
+
   if (entries.length === 0) {
     setStatus(doc, getString("no-results"), "info");
+    // 空结果时隐藏 batch、refine bar、pagination，避免旧状态残留
+    (doc.querySelector("#zsearch-batch") as HTMLElement).style.display = "none";
+    const refineEl0 = doc.querySelector("#zsearch-refine") as HTMLElement;
+    if (refineEl0) refineEl0.style.display = "none";
+    (doc.querySelector("#zsearch-pagination") as HTMLElement).style.display = "none";
+    // 清理筛选状态
+    if (searchWindowState) {
+      searchWindowState.rankFilter.clear();
+      rankFilterMatchers.clear();
+      searchWindowState.currentRefine = "all";
+    }
+    updateResultsScrollHeight(win);
     return;
   }
   const seconds = (durationMs / 1000).toFixed(2);
@@ -1803,22 +2477,37 @@ function renderResults(
 
   // Batch actions
   (doc.querySelector("#zsearch-batch") as HTMLElement).style.display = "flex";
-  // Refine bar：结果加载后显示，重置为"全部"
+  // Refine bar：结果加载后显示
   const refineEl = doc.querySelector("#zsearch-refine") as HTMLElement;
   if (refineEl) {
     refineEl.style.display = "flex";
-    // 重置 active 状态到 All
-    const refineBtns = doc.querySelectorAll<HTMLButtonElement>(".zsearch-btn-chip");
-    refineBtns.forEach((b) => b.classList.remove("zsearch-refine-active"));
-    const allBtn = doc.querySelector<HTMLButtonElement>('.zsearch-btn-chip[data-refine="all"]');
-    if (allBtn) allBtn.classList.add("zsearch-refine-active");
-    // 初始化计数为 "N / N"（当前为"全部"筛选，所有卡片可见）
-    const countEl = doc.querySelector("#zsearch-refine-count") as HTMLElement;
-    if (countEl) {
-      countEl.textContent = getString("refine-count" as any, {
-        args: { shown: String(entries.length), total: String(entries.length) },
-      });
+    if (!preserveFilters) {
+      // 新搜索：重置 active 状态到 All
+      const refineBtns = doc.querySelectorAll<HTMLButtonElement>(".zsearch-btn-chip");
+      refineBtns.forEach((b) => b.classList.remove("zsearch-refine-active"));
+      const allBtn = doc.querySelector<HTMLButtonElement>('.zsearch-btn-chip[data-refine="all"]');
+      if (allBtn) allBtn.classList.add("zsearch-refine-active");
+      // 重置 refine 状态
+      if (searchWindowState) {
+        searchWindowState.currentRefine = "all";
+        // 清除期刊等级筛选：避免新搜索后 rankFilter 残留导致卡片被隐藏
+        searchWindowState.rankFilter.clear();
+        rankFilterMatchers.clear();
+      }
+      // 取消等级筛选面板中所有复选框的勾选
+      const rankCheckboxes = doc.querySelectorAll<HTMLInputElement>(".zsearch-rankfilter-checkbox");
+      rankCheckboxes.forEach((cb) => { cb.checked = false; });
+      // 重置等级筛选按钮标签
+      updateRankFilterButton(win);
+      // 初始化计数为 "N / N"（当前为"全部"筛选，所有卡片可见）
+      const countEl = doc.querySelector("#zsearch-refine-count") as HTMLElement;
+      if (countEl) {
+        countEl.textContent = getString("refine-count" as any, {
+          args: { shown: String(entries.length), total: String(entries.length) },
+        });
+      }
     }
+    // preserveFilters=true 时保留当前 active 状态和计数（后续 applyFilters 会更新计数）
   }
   // 重置全选复选框
   const selectAll = doc.querySelector("#zsearch-select-all") as HTMLInputElement;
@@ -1831,18 +2520,73 @@ function renderResults(
     resultsEl.appendChild(buildResultCard(win, client, entries[i], i));
   }
 
-  // Pagination
-  const pageSize = searchWindowState!.pageSize;
-  const totalPages = Math.min(Math.ceil(total / pageSize), 200) || 1;
-  (doc.querySelector("#zsearch-pagination") as HTMLElement).style.display = "flex";
-  (doc.querySelector("#zsearch-prev") as HTMLButtonElement).disabled = page <= 1;
-  (doc.querySelector("#zsearch-next") as HTMLButtonElement).disabled =
-    page * pageSize >= total;
-  (doc.querySelector("#zsearch-page-info") as HTMLElement).textContent =
-    getString("pagination-page", { args: { page: String(page), total: String(totalPages) } });
+  // 加载更多时：恢复之前选中的复选框状态
+  if (preserveFilters && selectedSourceIds.size > 0) {
+    const cards = doc.querySelectorAll<HTMLElement>(".zsearch-result");
+    cards.forEach((card) => {
+      const cardIdx = Number(card.getAttribute("data-idx") || "-1");
+      const entry = cardIdx >= 0 ? entries[cardIdx] : undefined;
+      if (!entry) return;
+      const id = entry.doi || entry.sourceId || entry.title || "";
+      if (id && selectedSourceIds.has(id)) {
+        const cb = card.querySelector<HTMLInputElement>(".zsearch-result-checkbox");
+        if (cb) cb.checked = true;
+      }
+    });
+    // 重新更新导出按钮状态
+    updateExportButtonsState(win);
+  }
+
+  // Pagination：聚合搜索由 updateAggregatePagination 单独处理，单源搜索用默认分页
+  const isAggregate = searchWindowState?.mode === "aggregate";
+  if (!isAggregate) {
+    const pageSize = searchWindowState!.pageSize;
+    const totalPages = Math.min(Math.ceil(total / pageSize), 200) || 1;
+    (doc.querySelector("#zsearch-pagination") as HTMLElement).style.display = "flex";
+
+    // 关键修复：聚合搜索的 updateAggregatePagination 会用 cloneNode 替换 next 按钮并绑定
+    // loadMoreAggregate 监听器。切回单源搜索时必须用 cloneNode 重置监听器，否则单源翻页会
+    // 错误触发 loadMoreAggregate。
+    const prevBtnOld = doc.querySelector("#zsearch-prev") as HTMLButtonElement;
+    if (prevBtnOld) {
+      const prevBtn = prevBtnOld.cloneNode(true) as HTMLButtonElement;
+      prevBtnOld.parentNode?.replaceChild(prevBtn, prevBtnOld);
+      prevBtn.style.display = "";
+      prevBtn.textContent = "‹ Prev";
+      prevBtn.disabled = page <= 1;
+      prevBtn.addEventListener("click", () => {
+        if (searchWindowState && searchWindowState.currentPage > 1) {
+          doSearch(win, client, searchWindowState.currentPage - 1);
+        }
+      });
+    }
+    const nextBtnOld = doc.querySelector("#zsearch-next") as HTMLButtonElement;
+    if (nextBtnOld) {
+      const nextBtn = nextBtnOld.cloneNode(true) as HTMLButtonElement;
+      nextBtnOld.parentNode?.replaceChild(nextBtn, nextBtnOld);
+      nextBtn.textContent = "Next ›";
+      nextBtn.style.display = "";
+      nextBtn.disabled = page * pageSize >= total;
+      nextBtn.addEventListener("click", () => {
+        if (
+          searchWindowState &&
+          searchWindowState.currentPage * searchWindowState.pageSize < searchWindowState.total
+        ) {
+          doSearch(win, client, searchWindowState.currentPage + 1);
+        }
+      });
+    }
+    (doc.querySelector("#zsearch-page-info") as HTMLElement).textContent =
+      getString("pagination-page", { args: { page: String(page), total: String(totalPages) } });
+  }
 
   // 重新计算滚动容器高度（pagination 显示后布局变化）
   updateResultsScrollHeight(win);
+
+  // 加载更多时：应用当前 refine + rank 筛选条件到新渲染的卡片
+  if (preserveFilters && searchWindowState) {
+    applyFilters(win);
+  }
 }
 
 /**
@@ -2000,6 +2744,7 @@ function buildResultCard(win: Window, client: ElsevierClient, entry: UnifiedEntr
     semanticscholar: "🧠 S2",
     springer: "📚 Springer",
     googleScholar: "🎓 GS",
+    ieee: "⚡ IEEE",
   };
   const sourceList = entry.sources && entry.sources.length > 0
     ? entry.sources
@@ -2056,11 +2801,11 @@ function buildResultCard(win: Window, client: ElsevierClient, entry: UnifiedEntr
     if (nowStarred) {
       starBtn.classList.add("zsearch-starred");
       starBtn.textContent = "★";
-      showToast(win, "已收藏到阅读队列", "success");
+      showToast(win, getString("toast-starred-add"), "success");
     } else {
       starBtn.classList.remove("zsearch-starred");
       starBtn.textContent = "☆";
-      showToast(win, "已取消收藏", "info");
+      showToast(win, getString("toast-starred-remove"), "info");
     }
   });
   actions.appendChild(starBtn);
@@ -2070,10 +2815,49 @@ function buildResultCard(win: Window, client: ElsevierClient, entry: UnifiedEntr
   spacer.className = "zsearch-result-spacer";
   actions.appendChild(spacer);
 
+  // 翻译标题按钮（手动触发，调用 zotero-pdf-translate 插件 API）
+  const translateBtn = doc.createElement("button");
+  translateBtn.className = "zsearch-btn zsearch-btn-secondary zsearch-btn-small zsearch-btn-translate";
+  translateBtn.textContent = getString("result-translate");
+  translateBtn.title = "翻译标题（依赖 zotero-pdf-translate 插件）";
+  translateBtn.addEventListener("click", async () => {
+    if (!isPDFTranslateAvailable()) {
+      showToast(win, getString("toast-translate-no-plugin"), "error");
+      return;
+    }
+    if (!entry.title) {
+      showToast(win, getString("toast-translate-no-title"), "info");
+      return;
+    }
+    translateBtn.disabled = true;
+    const originalText = translateBtn.textContent;
+    translateBtn.textContent = "⏳";
+    try {
+      const translated = await translateTitle(entry.title);
+      if (translated) {
+        // 在标题下方插入/更新翻译结果显示
+        showTranslatedTitleInCard(card, doc, entry.title || "", translated);
+        showToast(win, getString("toast-translate-ok"), "success");
+        translateBtn.textContent = "✓";
+      } else {
+        showToast(win, getString("toast-translate-fail"), "error");
+        translateBtn.textContent = originalText || "译";
+      }
+    } catch (e) {
+      showToast(win, getString("toast-translate-fail-detail", { args: { message: (e as Error).message } }), "error");
+      translateBtn.textContent = originalText || "译";
+    } finally {
+      translateBtn.disabled = false;
+      // 2 秒后恢复按钮文本
+      setTimeout(() => { translateBtn.textContent = originalText || "译"; }, 2000);
+    }
+  });
+  actions.appendChild(translateBtn);
+
   // 引用格式预览按钮
   const citeBtn = doc.createElement("button");
   citeBtn.className = "zsearch-btn zsearch-btn-secondary zsearch-btn-small";
-  citeBtn.textContent = "引用";
+  citeBtn.textContent = getString("result-cite");
   citeBtn.title = "查看引用格式（GB/T 7714-2025、APA 7th、MLA 9th）";
   citeBtn.addEventListener("click", () => {
     showCitationDialog(win, entry);
@@ -2103,6 +2887,27 @@ function buildResultCard(win: Window, client: ElsevierClient, entry: UnifiedEntr
   actions.appendChild(relatedBtn);
 
   card.appendChild(actions);
+
+  // 搜索时自动翻译标题：若启用且 pdf-translate 插件可用，异步翻译并显示在标题下一行。
+  // 非阻塞：卡片先渲染，翻译完成后回填。translateClient 内置缓存与并发去重，
+  // 卡片被重建（翻页/加载更多/筛选）时同标题命中缓存会立即返回。
+  if (getPref("autoTranslateTitle") && entry.title && isPDFTranslateAvailable()) {
+    const cardRef = card;
+    const docRef = doc;
+    const titleRef = entry.title;
+    // 不 await，fire-and-forget，避免阻塞卡片渲染
+    translateTitle(titleRef)
+      .then((translated) => {
+        // 卡片可能已被移除（翻页/新搜索/清空），需检查是否仍在文档中
+        if (!translated) return;
+        if (!cardRef.isConnected) return;
+        showTranslatedTitleInCard(cardRef, docRef, titleRef, translated);
+      })
+      .catch((e) => {
+        log.translate.warn("autoTranslateTitle: translate failed", e);
+      });
+  }
+
   return card;
 }
 
@@ -2231,10 +3036,13 @@ async function importOne(
 ): Promise<void> {
   btn.disabled = true;
   btn.textContent = getString("result-importing");
+  // 读取默认集合配置（与批量导入保持一致，单条导入也落到配置的集合）
+  const collectionID = Number(getPref("defaultCollection")) || undefined;
   try {
     const scopusEntry = unifiedToScopusEntry(entry);
     const result = await importEntry(scopusEntry, client, {
       withAbstract: true,
+      collectionID,
       autoPDF: false, // PDF 下载改由下载链处理
     });
     if (result.skipped) {
@@ -2260,6 +3068,8 @@ async function importOne(
           "success",
         );
       } else {
+        // PDF 下载失败时恢复按钮可点击，允许用户重试
+        btn.disabled = false;
         btn.textContent = getString("result-imported");
         showToast(
           win,
@@ -2267,7 +3077,12 @@ async function importOne(
           "error",
         );
       }
+    } else {
+      // 无需下载 PDF 时恢复按钮可点击（允许重新导入或重试）
+      btn.disabled = false;
     }
+    // 导入成功后刷新其他相同 DOI 卡片的"已在库中"状态
+    refreshInLibraryBadges(win, entry);
   } catch (e) {
     btn.disabled = false;
     btn.textContent = getString("result-import");
@@ -2281,15 +3096,60 @@ async function importOne(
   }
 }
 
+/**
+ * 导入成功后刷新所有相同 DOI/标题的卡片的"已在库中"徽章和导入按钮状态。
+ * 避免聚合搜索中重复条目被多次导入。
+ */
+function refreshInLibraryBadges(win: Window, importedEntry: UnifiedEntry): void {
+  const doc = win.document;
+  const cards = doc.querySelectorAll<HTMLElement>(".zsearch-result");
+  const importedDoi = importedEntry.doi?.toLowerCase().trim();
+  const importedTitle = importedEntry.title?.trim().toLowerCase();
+  cards.forEach((card) => {
+    // 跳过已标记为"已在库中"的卡片
+    if (card.querySelector(".zsearch-badge-exists")) return;
+    const cardIdx = Number(card.getAttribute("data-idx") || "-1");
+    const entries = searchWindowState?.lastEntries || [];
+    const entry = cardIdx >= 0 ? entries[cardIdx] : undefined;
+    if (!entry) return;
+    const cardDoi = entry.doi?.toLowerCase().trim();
+    const cardTitle = entry.title?.trim().toLowerCase();
+    const isMatch = (importedDoi && cardDoi === importedDoi) ||
+                    (!importedDoi && importedTitle && cardTitle === importedTitle);
+    if (!isMatch) return;
+    // 添加"已在库中"徽章
+    const actions = card.querySelector(".zsearch-result-actions");
+    if (actions) {
+      const existsBadge = doc.createElement("span");
+      existsBadge.className = "zsearch-badge zsearch-badge-exists";
+      existsBadge.textContent = getString("result-exists" as any);
+      // 插入到已导入徽章之后
+      const existsOld = actions.querySelector(".zsearch-badge-exists");
+      if (!existsOld) actions.appendChild(existsBadge);
+    }
+    // 更新导入按钮状态
+    const importBtn = card.querySelector(".zsearch-btn-small") as HTMLButtonElement;
+    if (importBtn && !importBtn.classList.contains("zsearch-imported-exists")) {
+      importBtn.textContent = getString("result-imported");
+      importBtn.classList.add("zsearch-imported-exists");
+    }
+  });
+}
+
 async function importAll(win: Window, client: ElsevierClient): Promise<void> {
   const doc = win.document;
   const btn = doc.querySelector("#zsearch-import-all") as HTMLButtonElement;
   const entries = searchWindowState?.lastEntries || [];
   if (entries.length === 0) return;
 
+  // 批量导入过程中禁用其他操作（搜索、翻页、导出、单条导入、源切换）
+  setSearchingUI(doc, true);
   btn.disabled = true;
   const original = btn.textContent;
   let done = 0;
+  let success = 0;
+  let skipped = 0;
+  let failed = 0;
   const total = entries.length;
   btn.textContent = `0 / ${total}`;
 
@@ -2307,21 +3167,116 @@ async function importAll(win: Window, client: ElsevierClient): Promise<void> {
       if (result.item && getPref("autoDownloadPDF") && !hasPDFAttachment(result.item)) {
         await downloadPDFWithChain(entry, result.item, client);
       }
+      if (result.skipped) {
+        skipped++;
+      } else {
+        success++;
+      }
     } catch (e) {
       log.import.warn("import all: entry failed", e);
+      failed++;
     }
     done++;
     btn.textContent = `${done} / ${total}`;
   }
+  // 恢复 UI 状态
+  setSearchingUI(doc, false);
   btn.disabled = false;
   btn.textContent = original;
-  new ztoolkit.ProgressWindow(config.addonName, { closeTime: 3000 })
+  // 完成提示区分成功/跳过/失败
+  const summary = `成功 ${success} · 跳过 ${skipped} · 失败 ${failed}（共 ${total}）`;
+  new ztoolkit.ProgressWindow(config.addonName, { closeTime: 4000 })
     .createLine({
-      text: getString("batch-done", { args: { count: String(done) } }),
-      type: "success",
+      text: summary,
+      type: failed > 0 ? "warning" : "success",
       progress: 100,
     })
     .show();
+  // 批量导入后刷新所有卡片的"已在库中"状态
+  refreshAllInLibraryBadges(win);
+}
+
+/**
+ * 批量导入后刷新所有卡片的"已在库中"徽章状态。
+ */
+function refreshAllInLibraryBadges(win: Window): void {
+  const doc = win.document;
+  const cards = doc.querySelectorAll<HTMLElement>(".zsearch-result");
+  const entries = searchWindowState?.lastEntries || [];
+  cards.forEach((card) => {
+    const cardIdx = Number(card.getAttribute("data-idx") || "-1");
+    const entry = cardIdx >= 0 ? entries[cardIdx] : undefined;
+    if (!entry) return;
+    if (card.querySelector(".zsearch-badge-exists")) return;
+    if (isEntryInLibrary(entry)) {
+      const actions = card.querySelector(".zsearch-result-actions");
+      if (actions) {
+        const existsBadge = doc.createElement("span");
+        existsBadge.className = "zsearch-badge zsearch-badge-exists";
+        existsBadge.textContent = getString("result-exists" as any);
+        actions.appendChild(existsBadge);
+      }
+      const importBtn = card.querySelector(".zsearch-btn-small") as HTMLButtonElement;
+      if (importBtn && !importBtn.classList.contains("zsearch-imported-exists")) {
+        importBtn.textContent = getString("result-imported");
+        importBtn.classList.add("zsearch-imported-exists");
+      }
+    }
+  });
+}
+
+/**
+ * 同步刷新搜索结果卡片的星标状态。
+ * 在收藏列表弹窗中移除/清空条目后，搜索结果卡片的星标按钮可能仍显示已收藏状态，
+ * 需要根据实际收藏数据重新同步，避免点击行为反转。
+ */
+function syncCardStarStates(win: Window): void {
+  const doc = win.document;
+  const cards = doc.querySelectorAll<HTMLElement>(".zsearch-result");
+  const entries = searchWindowState?.lastEntries || [];
+  cards.forEach((card) => {
+    const cardIdx = Number(card.getAttribute("data-idx") || "-1");
+    const entry = cardIdx >= 0 ? entries[cardIdx] : undefined;
+    if (!entry) return;
+    const starBtn = card.querySelector(".zsearch-btn-star") as HTMLElement;
+    if (!starBtn) return;
+    const starred = isEntryStarred(entry);
+    if (starred) {
+      starBtn.classList.add("zsearch-starred");
+      starBtn.textContent = "★";
+    } else {
+      starBtn.classList.remove("zsearch-starred");
+      starBtn.textContent = "☆";
+    }
+  });
+}
+
+/**
+ * 在卡片标题下方显示翻译后的标题。
+ * 若已存在翻译结果元素则更新内容，否则新建一个浅灰色的副标题元素。
+ */
+function showTranslatedTitleInCard(
+  card: HTMLElement,
+  doc: Document,
+  originalTitle: string,
+  translatedTitle: string,
+): void {
+  let translateEl = card.querySelector(":scope > .zsearch-result-translated-title") as HTMLElement | null;
+  if (!translateEl) {
+    translateEl = doc.createElement("div");
+    translateEl.className = "zsearch-result-translated-title";
+    translateEl.style.cssText =
+      "font-size: 12px; color: #5f6368; margin: 4px 0 0 0; padding: 4px 8px; background: #f1f3f4; border-radius: 4px; line-height: 1.4;";
+    // 插入到标题之后
+    const titleEl = card.querySelector(":scope > .zsearch-result-title");
+    if (titleEl) {
+      titleEl.after(translateEl);
+    } else {
+      card.prepend(translateEl);
+    }
+  }
+  translateEl.textContent = `🌐 ${translatedTitle}`;
+  translateEl.title = `原标题：${originalTitle}`;
 }
 
 // Keep references to suppress tree-shaking
@@ -2517,7 +3472,7 @@ function toggleRankFilterPanel(win: Window): void {
 
   const title = doc.createElement("div");
   title.className = "zsearch-rankfilter-title";
-  title.textContent = "期刊等级筛选（勾选需保留的等级）";
+  title.textContent = getString("rank-filter-dialog-title");
   panel.appendChild(title);
 
   const grid = doc.createElement("div");
@@ -2563,7 +3518,7 @@ function toggleRankFilterPanel(win: Window): void {
   // 清空按钮
   const clearBtn = doc.createElement("button");
   clearBtn.className = "zsearch-btn zsearch-btn-secondary zsearch-rankfilter-clear";
-  clearBtn.textContent = "清空筛选";
+  clearBtn.textContent = getString("rank-filter-clear");
   clearBtn.addEventListener("click", () => {
     if (searchWindowState) searchWindowState.rankFilter.clear();
     rankFilterMatchers.clear();
@@ -2825,9 +3780,12 @@ function entriesToCsv(entries: UnifiedEntry[]): string {
 
 /**
  * 基于点击文章的标题，提取关键词后重新搜索。
- * 策略：从标题中提取长度≥3的实词，取前4个，用 TITLE-ABS-KEY() 包裹并以 AND 连接。
- * 注意：TITLE-ABS-KEY 是 Scopus 专有语法，若当前选中源不是 Scopus，
- *      会自动切换到 Scopus 以保证语法有效。
+ * 策略：从标题中提取长度≥3的实词，取前4个，
+ *       按当前搜索源的语法组装查询字符串。
+ * - Scopus: TITLE-ABS-KEY(w1 AND w2 ...)
+ * - PubMed: w1[tiab] AND w2[tiab]
+ * - arXiv:  ti:"w1 w2"
+ * - 其他源: 直接用关键词以 AND 连接（自由文本）
  */
 function searchRelated(win: Window, client: ElsevierClient, entry: UnifiedEntry): Promise<void> {
   const doc = win.document;
@@ -2841,12 +3799,10 @@ function searchRelated(win: Window, client: ElsevierClient, entry: UnifiedEntry)
   }
 
   // 提取关键词：去掉常见停用词，保留长度≥3的词
-  // 包含 Scopus 布尔运算符（and/or/not）防止破坏查询语法
   const stopwords = new Set([
     "the", "and", "for", "with", "from", "into", "this", "that", "based",
     "using", "via", "through", "towards", "toward", "study", "analysis",
     "research", "approach", "method", "results", "conclusion",
-    // 布尔运算符（防止破坏查询语法）
     "not", "but", "are", "was", "were", "been", "have", "has", "had",
     "its", "their", "they", "them", "between", "among",
   ]);
@@ -2856,32 +3812,16 @@ function searchRelated(win: Window, client: ElsevierClient, entry: UnifiedEntry)
     .filter((w) => w.length >= 3 && !stopwords.has(w))
     .slice(0, 4);
 
+  // 按当前搜索源生成查询字符串
+  const sourceId = readMenulistValue(doc, "#zsearch-source") || "scopus";
+  let query: string;
   if (words.length === 0) {
     // 退化：直接用原标题（用引号包裹防止被解析为运算符）
-    input.value = `"${title.replace(/"/g, " ")}"`;
+    query = `"${title.replace(/"/g, " ")}"`;
   } else {
-    // 构造 TITLE-ABS-KEY 查询
-    input.value = `TITLE-ABS-KEY(${words.join(" AND ")})`;
+    query = buildRelatedQuery(sourceId, words);
   }
-
-  // TITLE-ABS-KEY 是 Scopus 专有语法，若当前源非 Scopus 则切换
-  const activeSource = getActiveSource();
-  if (activeSource && activeSource.id !== "scopus") {
-    setActiveSource("scopus");
-    // 同步更新 UI 上的源选择器（XUL menulist，用 setAttribute 设值并触发 command 事件）
-    const ml = doc.querySelector("#zsearch-source") as any;
-    if (ml) {
-      ml.setAttribute("value", "scopus");
-      // 触发 command 事件让 menulist 内部同步选中项
-      try {
-        const evt = new Event("command", { bubbles: false });
-        ml.dispatchEvent(evt);
-      } catch {
-        /* 忽略事件触发失败 */
-      }
-    }
-    showToast(win, "已切换到 Scopus 源以支持高级语法", "info");
-  }
+  input.value = query;
 
   showToast(
     win,
@@ -2890,4 +3830,24 @@ function searchRelated(win: Window, client: ElsevierClient, entry: UnifiedEntry)
   );
 
   return doSearch(win, client, 1);
+}
+
+/** 按搜索源生成"查找相关"查询字符串 */
+function buildRelatedQuery(sourceId: string, words: string[]): string {
+  switch (sourceId) {
+    case "scopus":
+      return `TITLE-ABS-KEY(${words.join(" AND ")})`;
+    case "pubmed":
+      return words.map((w) => `${w}[tiab]`).join(" AND ");
+    case "arxiv":
+      return `ti:"${words.join(" ")}"`;
+    case "springer":
+      return words.map((w) => `keyword:"${w}"`).join(" AND ");
+    case "ieee":
+    case "semanticscholar":
+    case "googleScholar":
+    default:
+      // 自由文本：用 AND 连接
+      return words.join(" AND ");
+  }
 }

@@ -13,8 +13,11 @@ declare namespace _ZoteroTypes {
       "springerKey": string;
       "semanticScholarKey": string;
       "pubmedApiKey": string;
+      "ieeeKey": string;
       "defaultCollection": string;
       "autoDownloadPDF": boolean;
+      "autoTranslateTitle": boolean;
+      "translateTargetLang": string;
       "pageSize": number;
       "defaultSort": string;
       "requestTimeout": number;

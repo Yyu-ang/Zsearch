@@ -10,9 +10,12 @@
     <preference id="extensions.zotero.zsearch.springerKey" name="extensions.zotero.zsearch.springerKey" type="string" />
     <preference id="extensions.zotero.zsearch.semanticScholarKey" name="extensions.zotero.zsearch.semanticScholarKey" type="string" />
     <preference id="extensions.zotero.zsearch.pubmedApiKey" name="extensions.zotero.zsearch.pubmedApiKey" type="string" />
+    <preference id="extensions.zotero.zsearch.ieeeKey" name="extensions.zotero.zsearch.ieeeKey" type="string" />
     <preference id="extensions.zotero.zsearch.unpaywallEmail" name="extensions.zotero.zsearch.unpaywallEmail" type="string" />
     <preference id="extensions.zotero.zsearch.scihubUrl" name="extensions.zotero.zsearch.scihubUrl" type="string" />
     <preference id="extensions.zotero.zsearch.autoDownloadPDF" name="extensions.zotero.zsearch.autoDownloadPDF" type="bool" />
+    <preference id="extensions.zotero.zsearch.autoTranslateTitle" name="extensions.zotero.zsearch.autoTranslateTitle" type="bool" />
+    <preference id="extensions.zotero.zsearch.translateTargetLang" name="extensions.zotero.zsearch.translateTargetLang" type="string" />
     <preference id="extensions.zotero.zsearch.pageSize" name="extensions.zotero.zsearch.pageSize" type="int" />
     <preference id="extensions.zotero.zsearch.defaultSort" name="extensions.zotero.zsearch.defaultSort" type="string" />
     <preference id="extensions.zotero.zsearch.requestTimeout" name="extensions.zotero.zsearch.requestTimeout" type="int" />
@@ -108,6 +111,18 @@
       </vbox>
 
       <vbox class="zsearch-prefs-field">
+        <label data-l10n-id="zsearch-prefs-ieee-key" control="zsearch-ieee-key" class="zsearch-prefs-label" />
+        <html:input
+          id="zsearch-ieee-key"
+          type="text"
+          preference="extensions.zotero.zsearch.ieeeKey"
+          class="zsearch-prefs-input"
+        />
+        <label data-l10n-id="zsearch-prefs-ieee-key-help" class="zsearch-prefs-help" />
+        <label class="text-link zsearch-prefs-link" href="https://developer.ieee.org/" data-l10n-id="zsearch-prefs-apply-link" />
+      </vbox>
+
+      <vbox class="zsearch-prefs-field">
         <label data-l10n-id="zsearch-prefs-unpaywall-email" control="zsearch-unpaywall-email" class="zsearch-prefs-label" />
         <html:input
           id="zsearch-unpaywall-email"
@@ -127,6 +142,24 @@
       <vbox class="zsearch-prefs-field">
         <label data-l10n-id="zsearch-prefs-autodownload" control="zsearch-autodownload" class="zsearch-prefs-label" />
         <checkbox id="zsearch-autodownload" preference="extensions.zotero.zsearch.autoDownloadPDF" />
+      </vbox>
+
+      <vbox class="zsearch-prefs-field">
+        <label data-l10n-id="zsearch-prefs-autotranslate" control="zsearch-autotranslate" class="zsearch-prefs-label" />
+        <checkbox id="zsearch-autotranslate" preference="extensions.zotero.zsearch.autoTranslateTitle" />
+        <html:a href="https://github.com/windingwind/zotero-pdf-translate#readme" target="_blank" style="font-size: 11px; color: #1a73e8; margin-left: 22px;">
+          <html:span data-l10n-id="zsearch-prefs-autotranslate-help" />
+        </html:a>
+      </vbox>
+
+      <vbox class="zsearch-prefs-field">
+        <label data-l10n-id="zsearch-prefs-translate-target" control="zsearch-translate-target" class="zsearch-prefs-label" />
+        <html:input
+          id="zsearch-translate-target"
+          type="text"
+          preference="extensions.zotero.zsearch.translateTargetLang"
+          class="zsearch-prefs-input zsearch-prefs-input-narrow"
+        />
       </vbox>
 
       <vbox class="zsearch-prefs-field">

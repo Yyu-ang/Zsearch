@@ -1,8 +1,10 @@
 # Zsearch
 
-> 在 Zotero 内一站式检索 Scopus / PubMed / arXiv / Semantic Scholar / Springer / Google Scholar 等学术数据库，类 Google 的搜索体验，支持一键导入、PDF 下载、期刊分区徽章、引用数列、批量导出等科研工作流增强。
+> 在 Zotero 内一站式检索 Scopus / PubMed / arXiv / Semantic Scholar / Springer / IEEE Xplore / Google Scholar 等学术数据库，类 Google 的搜索体验，支持聚合搜索、一键导入、PDF 下载链、期刊分区徽章、引用数列、批量导出、搜索时自动翻译标题等科研工作流增强。
 
 面向 Zotero 7 / 8 / 9，遵循 Google Material Design 视觉风格。
+
+**简体中文** | [English](README.en.md)
 
 ---
 
@@ -10,11 +12,15 @@
 
 ### 文献搜索
 
-- **多源检索**：Scopus、PubMed、arXiv、Semantic Scholar、Springer 等 API 源 + Google Scholar、IEEE Xplore、JSTOR、ResearchGate 等 Web 跳转源
+- **多源检索**：Scopus、PubMed、arXiv、Semantic Scholar、Springer、IEEE Xplore 等 API 源 + Google Scholar HTML 解析源 + JSTOR、ResearchGate 等 Web 跳转源
+- **聚合搜索**：选择"聚合搜索"模式后并行调用所有已配置的 API 源，按 DOI/标题去重合并结果，每条结果标注来源（多源命中显示组合徽章如 `🔬 Scopus + 🏥 PubMed + ⚡ IEEE`），显著提升查全率
+- **流式增量加载**：聚合搜索中每源完成即合并并推送结果，优先返回有结果的条目，无需等待所有源完成
+- **加载更多**：搜索结果底部"加载更多"按钮拉取下一页，**增量追加新卡片**而非重建列表，保留用户当前滚动位置，加载过程中显示进度占位符
 - **高级搜索语法**：搜索框下方提供 `TITLE-ABS-KEY()` / `AUTHOR-NAME()` / `AFFIL()` / `PUBYEAR > 2020` / `AND` / `OR` / `NOT` / `LIMIT-TO()` 等语法快捷按钮，点击即可插入并自动定位光标
 - **关键词高亮**：搜索结果标题与摘要中匹配词自动高亮
 - **搜索历史**：自动记录最近 10 条搜索词，点击即可快速重搜
 - **DOI/arXiv ID 直接定位**：在搜索框输入 DOI（如 `10.1016/j.tust.2023.105734`）或 arXiv ID（如 `2301.12345`），自动识别并在浏览器打开对应文献页面，无需手动复制到浏览器
+- **搜索时自动翻译标题**：可选开启，搜索结果标题下一行直接显示译文（依赖 [zotero-pdf-translate](https://github.com/windingwind/zotero-pdf-translate#readme) 插件，内置缓存与并发去重，卡片重建时复用缓存不重复翻译）
 - **键盘快捷键**：`Enter` 搜索 / `Ctrl+Enter` 搜索 / `Esc` 清空输入框
 
 ### 结果展示
@@ -32,16 +38,24 @@
 - **二次筛选条**：对当前页结果即时过滤，无需重新请求 API
   - `全部` / `OA` / `被引≥50` / `被引≥100` / `近3年` / `近5年` / `综述`
   - 右侧实时显示 `已显示 / 总数` 计数
+- **期刊等级筛选**：基于 EasyScholar 期刊等级数据的多条件组合筛选
+  - 工具栏 `🎖 期刊等级` 按钮打开筛选弹窗
+  - 勾选常见高质量等级（JCR Q1/Q2、中科院 1/2 区、EI、CSSCI、北大核心等）任意组合
+  - 仅显示命中任一勾选等级的条目，未命中等级的条目不显示
+  - 已查询的期刊等级数据在加载更多时复用，避免重复请求 EasyScholar API
+- **筛选状态保持**：加载更多结果时保留当前所有筛选状态（OA / 期刊等级 / 二次筛选条），不重置
 
 ### 导入与下载
 
 - **单条导入**：点击结果卡片中的"导入"按钮
 - **批量导入**：点击"导入本页全部"批量导入当前页所有结果
 - **PDF 下载链**：自动按 `Unpaywall → SciHub → Zotero 内置 → Scopus` 顺序尝试下载 PDF
+  - 下载顺序可在设置中拖动调整
   - SciHub 镜像地址可在设置中配置（默认 `https://sci-hub.ru/`）
   - 使用 iPhone User-Agent 避免 SciHub 403 错误
   - 自动识别验证码页面和"文章未找到"错误页
-- **来源标记**：导入的条目 `libraryCatalog` 字段自动标记来源（Scopus / PubMed / arXiv / Google Scholar），便于追溯
+- **来源标记**：导入的条目 `libraryCatalog` 字段自动标记来源（Scopus / PubMed / arXiv / Google Scholar / IEEE / Springer / Semantic Scholar），便于追溯
+- **翻译标题按钮**：每张卡片右侧"译"按钮手动触发标题翻译，译文显示在标题下一行（依赖 zotero-pdf-translate 插件）
 - **导入反馈**：用右下角 toast 通知替代 alert，显示成功/失败详情，3 秒自动消失
 
 ### 批量导出
@@ -128,12 +142,32 @@ node node_modules/zotero-plugin-scaffold/bin/zotero-plugin.mjs build
 | 配置项 | 说明 | 获取方式 |
 |---|---|---|
 | **Elsevier API Key** | Scopus 搜索必需 | [https://dev.elsevier.com](https://dev.elsevier.com) 免费注册 |
+| **IEEE API Key** | IEEE Xplore 搜索源必需 | [https://developer.ieee.org](https://developer.ieee.org) 申请 |
 
-### 可选
+### 可选 API Key
+
+| 配置项 | 说明 | 获取方式 |
+|---|---|---|
+| EasyScholar API Key | 显示期刊分区徽章（JCR / 中科院 / EI / CSSCI 等） | [https://www.easyscholar.cc/console/user/open](https://www.easyscholar.cc/console/user/open) |
+| Springer API Key | Springer 搜索源必需 | [https://dev.springernature.com](https://dev.springernature.com) 免费获取 |
+| Semantic Scholar API Key | 推荐，无 Key 可能触发 403 反爬；有 Key 约 1 次/秒 | [https://www.semanticscholar.org/product/api](https://www.semanticscholar.org/product/api) |
+| PubMed API Key | 可选，无 Key 3 次/秒，有 Key 10 次/秒 | [https://www.ncbi.nlm.nih.gov/account/settings/](https://www.ncbi.nlm.nih.gov/account/settings/) |
+| Unpaywall Email | 用于 OA PDF 查找（免费，无需 Key） | 任意有效邮箱，建议真实邮箱以获取合理配额 |
+| Institution Token (Insttoken) | 全文 PDF 下载必需，向所在机构图书馆索取 | 机构图书馆 |
+
+### 翻译
 
 | 配置项 | 说明 | 默认值 |
 |---|---|---|
-| Institution Token (Insttoken) | 全文 PDF 下载必需，向所在机构图书馆索取 | 空 |
+| Auto-translate title when searching | 搜索时自动翻译标题，译文显示在标题下一行 | 关闭 |
+| Translation target language | 翻译目标语言（BCP 47 代码，如 `zh-CN` / `en-US` / `ja`） | `zh-CN` |
+
+> 翻译功能依赖 [zotero-pdf-translate](https://github.com/windingwind/zotero-pdf-translate#readme) 插件，翻译引擎与目标语言沿用其设置。如目标语言留空，则回退到 pdf-translate 插件的全局设置，再回退到 Zotero 界面语言。
+
+### 其他
+
+| 配置项 | 说明 | 默认值 |
+|---|---|---|
 | Auto-download PDF when importing | 导入时是否自动下载 PDF | 关闭 |
 | Results per page | 每页结果数 | 25 |
 | Default sort | 默认排序方式 | Relevance |
@@ -143,9 +177,21 @@ node node_modules/zotero-plugin-scaffold/bin/zotero-plugin.mjs build
 
 ### 连接测试
 
-首选项页提供 **Test All Connections** 按钮，一次性测试所有 API 连接（Scopus / PubMed / Semantic Scholar / Springer / Unpaywall / SciHub），实时显示进度（1/6, 2/6...），结果以弹窗形式展示 `✓ 正常` / `✗ 失败` / `– 跳过` 指示符和汇总统计。
+首选项页提供 **Test All Connections** 按钮，一次性测试所有 API 连接（Scopus / PubMed / Semantic Scholar / Springer / IEEE / Unpaywall / SciHub），实时显示进度（1/7, 2/7...），结果以弹窗形式展示 `✓ 正常` / `✗ 失败` / `– 跳过` 指示符和汇总统计。
 
 > 注：Semantic Scholar、PubMed、Unpaywall 即使未配置 API Key/Email 也会进行测试。
+
+### 403 错误排查
+
+部分 API 在特定情况下会返回 403 Forbidden，本插件对不同来源的 403 做了精细化处理与提示：
+
+| 来源 | 403 可能原因 | 解决方案 |
+|---|---|---|
+| **Semantic Scholar** | 无 API Key 时被反爬限制（瞬时或持续） | 配置 Semantic Scholar API Key；插件已实现首次 403 后延迟 2 秒重试 1 次 |
+| **IEEE** | API Key 账号不活跃（`ERR_403_DEVELOPER_INACTIVE`） / 配额耗尽（`ERR_403_OVER_RATE_LIMIT`） / Key 无效 | 前往 [https://developer.ieee.org/my-account](https://developer.ieee.org/my-account) 重新激活账号或申请新 Key；账号不活跃常见原因：超过 30 天未使用 / 被禁用 / 未完成激活 |
+| **SciHub** | User-Agent 识别为机器人 | 插件已使用 iPhone User-Agent 规避，如仍 403 请更换镜像地址 |
+
+> 插件对所有 API 请求使用 `successCodes: null` 选项，确保 4xx/5xx 状态码能被正确识别和处理，而非被笼统归类为"网络错误"。
 
 ---
 
@@ -160,13 +206,25 @@ node node_modules/zotero-plugin-scaffold/bin/zotero-plugin.mjs build
 2. 在搜索框输入关键词
 3. 选择搜索源（默认 Scopus）
    - **Scopus**：结构化字段最完整，推荐首选
+   - **聚合搜索**：并行查询所有已配置的 API 源，查全率最高
    - **Google Scholar**：覆盖面广，但可能触发反爬
-   - **PubMed / arXiv / Semantic Scholar / Springer**：领域专用源
+   - **PubMed / arXiv / Semantic Scholar / Springer / IEEE Xplore**：领域专用源
 4. 可选：使用语法快捷按钮构造高级查询（仅 Scopus 支持高级语法）
 5. 可选：设置年份范围、排序、类型过滤器
 6. 按 `Enter` 或点击 Search 按钮
+7. 想要更多结果时点击底部的"加载更多"按钮，新结果会增量追加在列表末尾，不打断当前阅读位置
 
 > **跨源搜索提示**：使用"找相关"按钮时，若当前源非 Scopus，会自动切换到 Scopus 以支持 `TITLE-ABS-KEY()` 高级语法。
+
+### 聚合搜索
+
+聚合搜索模式可并行调用所有已配置的 API 源（Scopus / PubMed / arXiv / Semantic Scholar / Springer / IEEE Xplore），将结果按 DOI/标题去重合并：
+
+- **流式增量加载**：每源完成即合并结果并推送，无需等待所有源完成，优先返回有结果的条目
+- **多源徽章**：每条结果左侧显示来源徽章，多源命中的条目显示组合徽章（如 `🔬 Scopus + 🏥 PubMed + ⚡ IEEE`）
+- **加载更多**：底部"加载更多"按钮会从各源拉取下一页，去重后增量追加，已查询过的期刊等级数据会复用避免重复请求
+- **筛选保持**：加载更多时保留当前所有筛选状态（OA / 期刊等级 / 二次筛选条），不重置
+- **搜索状态管理**：单源搜索与聚合搜索模式独立管理，切换时自动清理状态避免冲突
 
 ### 高级查询示例
 
@@ -228,7 +286,8 @@ TITLE-ABS-KEY(open access) AND LIMIT-TO(OA,"all")
 | PubMed | 🏥 | 否（可选配置 email 提高限额） | 生物医学领域 |
 | arXiv | 📄 | 否 | 预印本，3 秒限速 |
 | Semantic Scholar | 🧠 | 否（可选配置 API Key 提高限额） | AI 驱动的学术搜索 |
-| Springer | 📚 | 否（可选配置 API Key） | Springer Link 期刊 |
+| Springer | 📚 | 是（Springer API Key） | Springer Link 期刊 |
+| IEEE Xplore | ⚡ | 是（IEEE API Key） | 600 万+ 期刊/会议/标准元数据 |
 | **Google Scholar** | 📚 | 否 | **HTML 解析源**，结果以结构化卡片展示 |
 
 #### Google Scholar 解析源说明
@@ -254,7 +313,6 @@ Google Scholar 没有公开 API，本插件通过抓取搜索结果页 HTML 并�
 | Google | 🌍 |
 | ResearchGate | 🔬 |
 | JSTOR | 📖 |
-| IEEE Xplore | ⚡ |
 
 ---
 
@@ -273,7 +331,7 @@ Google Scholar 没有公开 API，本插件通过抓取搜索结果页 HTML 并�
 
 ### PDF 下载链
 
-按以下顺序尝试下载 PDF：
+默认按以下顺序尝试下载 PDF：
 
 1. **Unpaywall** — 优先尝试开放获取版本
 2. **SciHub** — 使用配置的镜像地址，iPhone User-Agent
@@ -281,6 +339,8 @@ Google Scholar 没有公开 API，本插件通过抓取搜索结果页 HTML 并�
 4. **Scopus** — 通过 Elsevier Article Retrieval API（需要 Insttoken）
 
 任意一个源成功即停止，所有源失败时显示错误提示。
+
+> **下载顺序可调**：在 Zsearch 首选项的"PDF 下载顺序"区域，拖动行项即可调整各渠道的尝试顺序。例如把 SciHub 拖到第 1 位可优先尝试 SciHub。
 
 ### 期刊分区数据来源
 
@@ -290,6 +350,24 @@ Google Scholar 没有公开 API，本插件通过抓取搜索结果页 HTML 并�
 - 缓存 TTL：默认 24 小时（由 `cacheTTL` 偏好控制）
 - 并发：4（避免触发速率限制）
 - 失败缓存：避免短时间内重复请求失败查询
+- **跨加载更多复用**：聚合搜索加载更多时，已查询过的期刊等级数据持久化在 `searchWindowState.aggregateRankedJournals` 中复用，避免重复请求触发 429
+
+### 翻译功能
+
+标题翻译通过 [zotero-pdf-translate](https://github.com/windingwind/zotero-pdf-translate#readme) 插件的全局 API 实现：
+
+- 调用约定：`Zotero.PDFTranslate.api.translate(raw, { pluginID, langfrom, langto, itemID })`
+- 返回 `Promise<TranslateTask>`，`task.status === "success"` 时 `task.result` 为译文
+- **缓存**：跨搜索、跨卡片重建复用，避免同一标题被重复翻译（节省翻译服务配额）
+- **并发去重**：合并并发的相同标题翻译请求，同一标题只发一次 API 调用
+- **触发时机**：搜索结果渲染时自动触发（非导入时），译文显示在标题下一行
+- **目标语言优先级**：本插件 `translateTargetLang` 偏好 → pdf-translate 插件全局设置 → Zotero 界面语言
+
+### 错误处理
+
+- 所有 API 请求使用 `successCodes: null` 选项，确保 4xx/5xx 状态码能被正确识别和处理
+- IEEE API 通过 Mashery 代理返回错误，插件读取 `X-Mashery-Error-Code` 和 `X-Error-Detail-Header` 响应头识别具体错误类型（`ERR_403_DEVELOPER_INACTIVE` / `ERR_403_OVER_RATE_LIMIT` 等）
+- Semantic Scholar 和 IEEE 的 403 错误首次失败后延迟 2 秒重试 1 次（应对瞬时反爬误判），账号问题与配额问题直接抛出不重试
 
 ### 视觉规范
 

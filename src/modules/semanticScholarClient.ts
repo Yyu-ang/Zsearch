@@ -157,44 +157,74 @@ export class SemanticScholarSource implements ISearchSource {
       `Semantic Scholar search: query="${trimmedQuery}", offset=${offset}, limit=${limit}, year=${yearRange || "-"}, hasKey=${this.hasKeyConfigured()}`,
     );
 
+    // 最多尝试 2 次：第 1 次失败若为 403，延迟 2 秒后重试 1 次（应对瞬时反爬误判）
     let data: any;
-    try {
-      const resp = await Zotero.HTTP.request("GET", url, {
-        responseType: "json",
-        timeout: 15000,
-        headers,
-      });
+    let lastError: SemanticScholarError | null = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        // successCodes: null 让所有 HTTP 状态码都返回响应对象，避免 Zotero.HTTP.request
+        // 在 4xx/5xx 时直接抛出 UnexpectedStatusException，导致无法读取响应体或区分状态码。
+        // 配合下面对 403/429 的显式分支处理，能给出更准确的错误信息与重试逻辑。
+        const resp = await Zotero.HTTP.request("GET", url, {
+          responseType: "json",
+          timeout: 15000,
+          headers,
+          successCodes: null,
+        });
 
-      if (resp.status < 200 || resp.status >= 300) {
+        if (resp.status >= 200 && resp.status < 300) {
+          data = resp.response;
+          lastError = null;
+          break;
+        }
+
         const errMsg = this.extractError(resp.response);
-        log.api.warn(`Semantic Scholar HTTP ${resp.status}: ${errMsg}`);
-        // 403 时给出更友好的提示
+        log.api.warn(`Semantic Scholar HTTP ${resp.status} (attempt ${attempt + 1}/2): ${errMsg}`);
+
         if (resp.status === 403) {
-          throw new SemanticScholarError(
+          // 403：无 Key 时常见反爬；首次失败延迟 2s 后重试一次，仍失败再抛友好错误
+          lastError = new SemanticScholarError(
             403,
             this.hasKeyConfigured()
               ? `403 Forbidden：API Key 无效或已被封禁。请检查 Semantic Scholar API Key 配置。`
-              : `403 Forbidden：Semantic Scholar 拒绝访问。可能原因：无 API Key 时被反爬限制。建议在 Zsearch 首选项中配置 Semantic Scholar API Key（申请地址：https://www.semanticscholar.org/product/api）`,
+              : `403 Forbidden：Semantic Scholar 拒绝访问（无 API Key 时被反爬限制）。建议在 Zsearch 首选项中配置 Semantic Scholar API Key（申请地址：https://www.semanticscholar.org/product/api）。`,
           );
+          if (attempt === 0) {
+            await Zotero.Promise.delay(2000);
+            continue;
+          }
+          break;
         }
+
         if (resp.status === 429) {
+          // 429：限额耗尽，重试也无济于事，直接抛出
           throw new SemanticScholarError(
             429,
             `429 Too Many Requests：请求过于频繁，请稍后再试。无 API Key 时共享限额被耗尽，建议配置 API Key。`,
           );
         }
+
         throw new SemanticScholarError(
           resp.status,
           `Semantic Scholar API ${resp.status}: ${errMsg}`,
         );
+      } catch (e: any) {
+        // 已包装的错误直接抛出（429 等已构造好的 SemanticScholarError）
+        if (e instanceof SemanticScholarError) throw e;
+        log.api.warn(`Semantic Scholar request failed (attempt ${attempt + 1}/2): ${e?.message || e}`);
+        lastError = new SemanticScholarError(0, `Network error: ${e?.message || e}`);
+        // 网络错误也重试一次
+        if (attempt === 0) {
+          await Zotero.Promise.delay(2000);
+          continue;
+        }
+        break;
       }
+    }
 
-      data = resp.response;
-    } catch (e: any) {
-      // 已包装的错误直接抛出
-      if (e instanceof SemanticScholarError) throw e;
-      log.api.warn(`Semantic Scholar request failed: ${e?.message || e}`);
-      throw new SemanticScholarError(0, `Network error: ${e?.message || e}`);
+    if (lastError) throw lastError;
+    if (!data) {
+      throw new SemanticScholarError(0, "Semantic Scholar 请求未返回数据");
     }
 
     const total = Number(data?.total || 0);

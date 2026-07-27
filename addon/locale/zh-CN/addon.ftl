@@ -115,3 +115,82 @@ zsearch-gs-captcha = Google Scholar 需要验证码。请先在浏览器中完�
 zsearch-gs-rate-limit = Google Scholar 速率限制。请等待几分钟后重试。
 zsearch-gs-no-results = Google Scholar 未返回结果。
 zsearch-gs-source-label = Google Scholar（解析）
+
+# 结果卡片按钮
+zsearch-result-translate = 译
+zsearch-result-translate-tooltip = 翻译标题（依赖 zotero-pdf-translate 插件）
+zsearch-result-cite = 引用
+zsearch-result-cite-tooltip = 预览引用格式
+zsearch-result-detail = 详情
+zsearch-result-detail-tooltip = 显示/隐藏完整元信息
+
+# 加载更多
+zsearch-load-more = 加载更多 ›
+zsearch-load-more-loading = 加载中…（{ $done } / { $total }）
+
+# 引用格式预览弹窗
+zsearch-cite-dialog-title = 引用格式预览
+zsearch-cite-dialog-note = 使用 Zotero 内置引用样式生成。如需更多样式，请在 Zotero 首选项 → 引用 → 样式管理器 中安装。
+zsearch-cite-style-label = 引用样式:
+zsearch-cite-copy = 复制
+zsearch-cite-copied = ✓ 已复制
+zsearch-cite-generating = 正在生成...
+zsearch-cite-close = 关闭
+zsearch-cite-empty = 无可用样式。请在 Zotero 首选项中安装引用样式。
+zsearch-cite-error = 生成引用失败：{ $message }
+
+# 阅读队列/收藏弹窗
+zsearch-starred-dialog-title = 阅读队列
+zsearch-starred-empty = 暂无收藏条目。点击结果卡片左侧的 ☆ 即可收藏。
+zsearch-starred-remove = 移除
+zsearch-starred-clear = 清空全部
+zsearch-starred-clear-confirm = 确定清空全部收藏条目吗？
+zsearch-starred-count = 共 { $count } 条
+
+# 统计弹窗
+zsearch-stats-dialog-title = 搜索结果统计
+zsearch-stats-overview = 总览
+zsearch-stats-year-title = 年份分布
+zsearch-stats-cited-title = 被引次数分布
+zsearch-stats-oa-ratio = 开放获取占比: { $ratio }%
+zsearch-stats-doi-ratio = 含 DOI 占比: { $ratio }%
+zsearch-stats-abstract-ratio = 含摘要占比: { $ratio }%
+zsearch-stats-close = 关闭
+
+# 期刊等级筛选弹窗
+zsearch-rank-filter-dialog-title = 期刊等级筛选（勾选需保留的等级）
+zsearch-rank-filter-clear = 清空筛选
+zsearch-rank-filter-apply = 应用
+zsearch-rank-filter-count = 已选 { $count } 项
+
+# 翻译相关 toast
+zsearch-toast-translate-ok = 标题已翻译
+zsearch-toast-translate-fail = 翻译失败，请检查 pdf-translate 插件配置
+zsearch-toast-translate-fail-detail = 翻译失败: { $message }
+zsearch-toast-translate-no-plugin = 未检测到 zotero-pdf-translate 插件，请先安装
+zsearch-toast-translate-no-title = 无标题可翻译
+
+# 收藏相关 toast
+zsearch-toast-starred-add = 已加入阅读队列
+zsearch-toast-starred-remove = 已移出阅读队列
+zsearch-toast-starred-full = 阅读队列已满（最多 200 条）
+
+# 聚合搜索相关
+zsearch-aggregate-label = 聚合搜索
+zsearch-aggregate-waiting = 等待各源返回结果…
+zsearch-aggregate-source-done = { $source } 完成（{ $count } 条）
+zsearch-aggregate-source-fail = { $source } 失败：{ $reason }
+
+# DOI/arXiv 识别
+zsearch-doi-detected = 检测到 { $type }：{ $id }，已在浏览器打开
+zsearch-doi-type-doi = DOI
+zsearch-doi-type-arxiv = arXiv ID
+
+# 导入检测
+zsearch-toast-exists = 该条目已在库中：{ $title }
+
+# 占位符与状态
+zsearch-status-ready = 就绪
+zsearch-status-searching = 搜索中…
+zsearch-status-no-results = 未找到结果。
+zsearch-status-error = 搜索出错：{ $message }

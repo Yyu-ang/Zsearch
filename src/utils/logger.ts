@@ -155,4 +155,5 @@ export const log = {
   prefs: logger.scoped("PREFS"),
   column: logger.scoped("COLUMN"),
   hooks: logger.scoped("HOOKS"),
+  translate: logger.scoped("TRANSLATE"),
 };

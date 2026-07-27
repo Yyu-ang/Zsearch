@@ -38,6 +38,8 @@ export async function registerPrefsScripts(win: Window): Promise<void> {
   bindHtmlInput(doc, "#zsearch-insttoken", "insttoken", false);
   bindHtmlInput(doc, "#zsearch-easyscholar-key", "easyScholarKey", false);
   bindHtmlCheckbox(doc, "#zsearch-autodownload", "autoDownloadPDF");
+  bindHtmlCheckbox(doc, "#zsearch-autotranslate", "autoTranslateTitle");
+  bindHtmlInput(doc, "#zsearch-translate-target", "translateTargetLang", false);
   bindHtmlInput(doc, "#zsearch-pagesize", "pageSize", true);
   bindHtmlMenulist(doc, "#zsearch-defaultsort", "defaultSort");
   bindHtmlInput(doc, "#zsearch-timeout", "requestTimeout", true);
@@ -52,6 +54,7 @@ export async function registerPrefsScripts(win: Window): Promise<void> {
     false,
   );
   bindHtmlInput(doc, "#zsearch-pubmed-key", "pubmedApiKey", false);
+  bindHtmlInput(doc, "#zsearch-ieee-key", "ieeeKey", false);
   bindHtmlInput(doc, "#zsearch-unpaywall-email", "unpaywallEmail", false);
 
   // PDF 下载顺序拖拽排序
@@ -272,12 +275,24 @@ function clearDragOverMarks(doc: Document): void {
 }
 
 /**
+ * 获取完整下载顺序：偏好中已保存的渠道 + 未保存但属于 ALL_PROVIDERS 的渠道。
+ * 保证返回 ALL_PROVIDERS 的全量排列，避免偏好旧值缺失某渠道时该渠道无法调整位置。
+ */
+function getFullDownloadOrder(): string[] {
+  const currentOrder = getDownloadOrder();
+  return [
+    ...currentOrder,
+    ...ALL_PROVIDERS.filter((id) => !currentOrder.includes(id)),
+  ];
+}
+
+/**
  * 通过按钮点击移动某行的位置。
  * @param providerId 目标渠道 ID
  * @param delta      -1 上移 / +1 下移
  */
 function moveRow(doc: Document, providerId: string, delta: number): void {
-  const order = getDownloadOrder();
+  const order = getFullDownloadOrder();
   const idx = order.indexOf(providerId);
   if (idx < 0) return;
   const newIdx = idx + delta;
@@ -298,7 +313,7 @@ function reorderProviders(
   srcId: string,
   targetId: string,
 ): void {
-  const order = getDownloadOrder();
+  const order = getFullDownloadOrder();
   const srcIdx = order.indexOf(srcId);
   const targetIdx = order.indexOf(targetId);
   if (srcIdx < 0 || targetIdx < 0 || srcIdx === targetIdx) return;
@@ -466,6 +481,11 @@ async function testAllConnections(doc: Document): Promise<void> {
       test: testPubMed,
     },
     {
+      id: "ieee",
+      name: "IEEE Xplore",
+      test: testIeee,
+    },
+    {
       id: "unpaywall",
       name: "Unpaywall",
       test: testUnpaywall,
@@ -571,6 +591,7 @@ function syncInputsToPrefs(doc: Document): void {
     { selector: "#zsearch-springer-key", key: "springerKey" },
     { selector: "#zsearch-semantic-scholar-key", key: "semanticScholarKey" },
     { selector: "#zsearch-pubmed-key", key: "pubmedApiKey" },
+    { selector: "#zsearch-ieee-key", key: "ieeeKey" },
     { selector: "#zsearch-unpaywall-email", key: "unpaywallEmail" },
     { selector: "#zsearch-scihub-url", key: "scihubUrl" },
     { selector: "#zsearch-pagesize", key: "pageSize", isNumber: true },
@@ -689,6 +710,31 @@ async function testPubMed(): Promise<{ ok: boolean; detail?: string } | null> {
       const body = typeof resp.response === "string" ? JSON.parse(resp.response) : resp.response;
       const total = body?.esearchresult?.count;
       return { ok: true, detail: `返回 ${total || 0} 条结果${apiKey ? "（带 Key）" : "（无 Key）"}` };
+    }
+    return { ok: false, detail: `HTTP ${resp.status}` };
+  } catch (e: any) {
+    return { ok: false, detail: e?.message || String(e) };
+  }
+}
+
+/** 测试 IEEE Xplore - 执行最小分页搜索 */
+async function testIeee(): Promise<{ ok: boolean; detail?: string } | null> {
+  const apiKey = (getPref("ieeeKey") as string) || "";
+  if (!apiKey) return null;
+  try {
+    const url =
+      "https://ieeexploreapi.ieee.org/api/v1/search/articles" +
+      "?apikey=" + encodeURIComponent(apiKey) +
+      "&querytext=" + encodeURIComponent("test") +
+      "&start_record=1&max_records=1";
+    const resp = await Zotero.HTTP.request("GET", url, {
+      responseType: "json",
+      timeout: 15000,
+      headers: { Accept: "application/json" },
+    });
+    if (resp.status >= 200 && resp.status < 300) {
+      const total = resp.response?.totalfound;
+      return { ok: true, detail: `返回 ${total || 0} 条结果` };
     }
     return { ok: false, detail: `HTTP ${resp.status}` };
   } catch (e: any) {

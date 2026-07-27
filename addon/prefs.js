@@ -6,8 +6,13 @@ pref("extensions.zotero.zsearch.easyScholarKey", "");
 pref("extensions.zotero.zsearch.springerKey", "");
 pref("extensions.zotero.zsearch.semanticScholarKey", "");
 pref("extensions.zotero.zsearch.pubmedApiKey", "");
+pref("extensions.zotero.zsearch.ieeeKey", "");
 pref("extensions.zotero.zsearch.defaultCollection", "");
 pref("extensions.zotero.zsearch.autoDownloadPDF", true);
+// 搜索时自动翻译标题为目标语言，显示在标题下一行（依赖 zotero-pdf-translate 插件）
+pref("extensions.zotero.zsearch.autoTranslateTitle", false);
+// 翻译目标语言（BCP 47 代码，如 zh-CN / en-US / ja）；留空则用 pdf-translate 插件的全局设置
+pref("extensions.zotero.zsearch.translateTargetLang", "zh-CN");
 pref("extensions.zotero.zsearch.pageSize", 25);
 pref("extensions.zotero.zsearch.defaultSort", "");
 pref("extensions.zotero.zsearch.requestTimeout", 30000);

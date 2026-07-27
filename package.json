@@ -1,7 +1,7 @@
 {
   "name": "zsearch",
   "type": "module",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Search, import and download Elsevier (Scopus/ScienceDirect) literature into Zotero, Google-Scholar style.",
   "config": {
     "addonName": "Zsearch",

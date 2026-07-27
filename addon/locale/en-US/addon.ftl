@@ -115,3 +115,82 @@ zsearch-gs-captcha = Google Scholar requires captcha. Please complete it in your
 zsearch-gs-rate-limit = Google Scholar rate limit reached. Please wait a few minutes.
 zsearch-gs-no-results = Google Scholar returned no results.
 zsearch-gs-source-label = Google Scholar (parsed)
+
+# Result card buttons
+zsearch-result-translate = Translate
+zsearch-result-translate-tooltip = Translate title (requires zotero-pdf-translate plugin)
+zsearch-result-cite = Cite
+zsearch-result-cite-tooltip = Preview citation format
+zsearch-result-detail = Details
+zsearch-result-detail-tooltip = Show/hide full metadata
+
+# Load more
+zsearch-load-more = Load more ›
+zsearch-load-more-loading = Loading… ({ $done } / { $total })
+
+# Citation preview dialog
+zsearch-cite-dialog-title = Citation Preview
+zsearch-cite-dialog-note = Generated with Zotero's built-in citation styles. For more styles, install them in Zotero Preferences → Cite → Style Manager.
+zsearch-cite-style-label = Citation style:
+zsearch-cite-copy = Copy
+zsearch-cite-copied = ✓ Copied
+zsearch-cite-generating = Generating...
+zsearch-cite-close = Close
+zsearch-cite-empty = No styles available. Please install citation styles in Zotero preferences.
+zsearch-cite-error = Failed to generate citation: { $message }
+
+# Reading queue / bookmarks dialog
+zsearch-starred-dialog-title = Reading Queue
+zsearch-starred-empty = No bookmarked items. Click ☆ on the left of a result card to bookmark.
+zsearch-starred-remove = Remove
+zsearch-starred-clear = Clear all
+zsearch-starred-clear-confirm = Clear all bookmarked items?
+zsearch-starred-count = { $count } items
+
+# Statistics dialog
+zsearch-stats-dialog-title = Search Result Statistics
+zsearch-stats-overview = Overview
+zsearch-stats-year-title = Year Distribution
+zsearch-stats-cited-title = Citation Count Distribution
+zsearch-stats-oa-ratio = Open access ratio: { $ratio }%
+zsearch-stats-doi-ratio = DOI coverage: { $ratio }%
+zsearch-stats-abstract-ratio = Abstract coverage: { $ratio }%
+zsearch-stats-close = Close
+
+# Journal rank filter dialog
+zsearch-rank-filter-dialog-title = Journal Rank Filter (check ranks to keep)
+zsearch-rank-filter-clear = Clear filter
+zsearch-rank-filter-apply = Apply
+zsearch-rank-filter-count = { $count } selected
+
+# Translation toasts
+zsearch-toast-translate-ok = Title translated
+zsearch-toast-translate-fail = Translation failed; please check the pdf-translate plugin configuration
+zsearch-toast-translate-fail-detail = Translation failed: { $message }
+zsearch-toast-translate-no-plugin = zotero-pdf-translate plugin not detected; please install it first
+zsearch-toast-translate-no-title = No title to translate
+
+# Bookmark toasts
+zsearch-toast-starred-add = Added to reading queue
+zsearch-toast-starred-remove = Removed from reading queue
+zsearch-toast-starred-full = Reading queue is full (max 200 items)
+
+# Aggregated search
+zsearch-aggregate-label = Aggregated
+zsearch-aggregate-waiting = Waiting for sources to return results…
+zsearch-aggregate-source-done = { $source } done ({ $count } items)
+zsearch-aggregate-source-fail = { $source } failed: { $reason }
+
+# DOI/arXiv detection
+zsearch-doi-detected = Detected { $type }: { $id }, opened in browser
+zsearch-doi-type-doi = DOI
+zsearch-doi-type-arxiv = arXiv ID
+
+# Import detection
+zsearch-toast-exists = Item already in library: { $title }
+
+# Placeholders & status
+zsearch-status-ready = Ready
+zsearch-status-searching = Searching…
+zsearch-status-no-results = No results found.
+zsearch-status-error = Search error: { $message }

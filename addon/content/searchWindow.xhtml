@@ -139,18 +139,10 @@
             <button id="zsearch-search-btn" class="zsearch-btn zsearch-btn-primary">Search</button>
           </div>
           <div id="zsearch-history-panel" class="zsearch-history-panel" style="display: none;"></div>
-          <!-- 高级搜索语法快捷按钮：点击插入对应语法到搜索框 -->
+          <!-- 高级搜索语法快捷按钮：由 JS 按当前搜索源动态生成 -->
           <div id="zsearch-syntax-bar" class="zsearch-syntax-bar">
             <span class="zsearch-syntax-label">语法:</span>
-            <button class="zsearch-btn zsearch-btn-syntax" data-insert="TITLE-ABS-KEY()">{title}</button>
-            <button class="zsearch-btn zsearch-btn-syntax" data-insert="AUTHOR-NAME()">{author}</button>
-            <button class="zsearch-btn zsearch-btn-syntax" data-insert="AFFIL()">{affil}</button>
-            <button class="zsearch-btn zsearch-btn-syntax" data-insert="PUBYEAR &gt; 2020">{year}</button>
-            <button class="zsearch-btn zsearch-btn-syntax" data-insert=" AND ">AND</button>
-            <button class="zsearch-btn zsearch-btn-syntax" data-insert=" OR ">OR</button>
-            <button class="zsearch-btn zsearch-btn-syntax" data-insert=" NOT ">NOT</button>
-            <button class="zsearch-btn zsearch-btn-syntax" data-insert="LIMIT-TO(DOCTYPE,&quot;ar&quot;)">{ar}</button>
-            <button class="zsearch-btn zsearch-btn-syntax" data-insert="LIMIT-TO(OA,&quot;all&quot;)">{oa}</button>
+            <!-- 语法按钮由 updateSyntaxBar() 动态插入此处 -->
             <span class="zsearch-filter-divider"></span>
             <button id="zsearch-starred-btn" class="zsearch-btn zsearch-btn-syntax" title="阅读队列">★ 收藏</button>
             <button id="zsearch-stats-btn" class="zsearch-btn zsearch-btn-syntax" title="结果统计">📊 统计</button>
@@ -180,6 +172,7 @@
         <button class="zsearch-btn zsearch-btn-chip" data-refine="year3">Last 3y</button>
         <button class="zsearch-btn zsearch-btn-chip" data-refine="year5">Last 5y</button>
         <button class="zsearch-btn zsearch-btn-chip" data-refine="review">Review</button>
+        <button id="zsearch-rankfilter-btn" class="zsearch-btn zsearch-btn-chip" title="按 EasyScholar 期刊等级筛选">📊 等级</button>
         <span id="zsearch-refine-count" class="zsearch-refine-count"></span>
       </div>
       <div id="zsearch-batch" class="zsearch-batch" style="display: none;">

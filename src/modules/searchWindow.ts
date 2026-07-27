@@ -1681,6 +1681,7 @@ function buildRanksRow(
     span.textContent = b.label;
     span.setAttribute("title", b.label);
     span.setAttribute("data-value", b.value);
+    span.setAttribute("data-kind", b.kind);
     row.appendChild(span);
   }
   return row;
@@ -2449,15 +2450,21 @@ function applyFilters(win: Window): void {
 
 /**
  * 检查卡片是否匹配期刊等级筛选。
- * 卡片上的 EasyScholar 徽章（.zsearch-rank-badge）的 data-kind 属性
- * 必须至少有一个在勾选集合中。
+ * 遍历勾选的筛选选项，对每个选项用其 match 函数检查卡片上的徽章。
+ * 任一选项匹配即返回 true。
  */
 function cardMatchesRankFilter(card: HTMLElement, rankFilter: Set<string>): boolean {
   const badges = card.querySelectorAll<HTMLElement>(".zsearch-rank-badge");
   if (badges.length === 0) return false; // 无等级徽章，不匹配
-  for (const badge of badges) {
-    const kind = badge.getAttribute("data-kind") || "";
-    if (rankFilter.has(kind)) return true;
+  for (const key of rankFilter) {
+    const matchFn = rankFilterMatchers.get(key);
+    if (!matchFn) continue;
+    const [kind] = key.split(":");
+    for (const badge of badges) {
+      const badgeKind = badge.getAttribute("data-kind") || "";
+      const badgeValue = badge.getAttribute("data-value") || "";
+      if (badgeKind === kind && matchFn(badgeValue)) return true;
+    }
   }
   return false;
 }

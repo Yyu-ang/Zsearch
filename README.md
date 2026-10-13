@@ -2,7 +2,7 @@
 
 > 在 Zotero 内一站式检索 Scopus / PubMed / arXiv / Semantic Scholar / Springer / IEEE Xplore / Google Scholar 等学术数据库，类 Google 的搜索体验，支持聚合搜索、一键导入、PDF 下载链、期刊分区徽章、引用数列、批量导出、搜索时自动翻译标题等科研工作流增强。
 
-面向 Zotero 7 / 8 / 9，遵循 Google Material Design 视觉风格。
+面向 Zotero 7 / 8 / 9 / 10，遵循 Google Material Design 视觉风格。
 
 **简体中文** | [English](README.en.md)
 
@@ -116,14 +116,14 @@
 
 ### 方式一：下载预构建 XPI
 
-1. 下载 [build/zsearch.xpi](build/zsearch.xpi)
+1. 从 [GitHub Releases](https://github.com/cloneorcopy/Zsearch/releases/latest/download/zsearch.xpi) 下载最新的 `zsearch.xpi`
 2. Zotero → `工具` → `附加组件` → 齿轮图标 → `Install Add-on From File...`
 3. 选择下载的 `.xpi` 文件
 
 ### 方式二：从源码构建
 
 ```bash
-git clone https://github.com/zotero-plugin-dev/zsearch.git
+git clone https://github.com/cloneorcopy/Zsearch.git
 cd zsearch
 npm install
 node node_modules/zotero-plugin-scaffold/bin/zotero-plugin.mjs build
@@ -393,7 +393,7 @@ Google Scholar 没有公开 API，本插件通过抓取搜索结果页 HTML 并�
 
 ## 兼容性
 
-- Zotero 7 / 8 / 9（`strict_min_version: 6.999`, `strict_max_version: 9.*`）
+- Zotero 7 / 8 / 9 / 10（`strict_min_version: 6.999`, `strict_max_version: 10.0.*`；包含 Zotero 10.0.6，建议实际安装验证）
 - Windows / macOS / Linux
 
 ---
@@ -478,5 +478,5 @@ npm run lint:fix
 
 ## 反馈与问题
 
-- 提交 Issue：[GitHub Issues](https://github.com/zotero-plugin-dev/zsearch/issues)
+- 提交 Issue：[GitHub Issues](https://github.com/cloneorcopy/Zsearch/issues)
 - 设计文档：[docs/DESIGN.md](docs/DESIGN.md)

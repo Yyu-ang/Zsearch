@@ -1,7 +1,7 @@
 {
   "name": "zsearch",
   "type": "module",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Search, import and download Elsevier (Scopus/ScienceDirect) literature into Zotero, Google-Scholar style.",
   "config": {
     "addonName": "Zsearch",
@@ -12,13 +12,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zotero-plugin-dev/zsearch.git"
+    "url": "git+https://github.com/cloneorcopy/Zsearch.git"
   },
   "author": "Zsearch",
   "bugs": {
-    "url": "https://github.com/zotero-plugin-dev/zsearch/issues"
+    "url": "https://github.com/cloneorcopy/Zsearch/issues"
   },
-  "homepage": "https://github.com/zotero-plugin-dev/zsearch#readme",
+  "homepage": "https://github.com/cloneorcopy/Zsearch",
   "license": "AGPL-3.0-or-later",
   "scripts": {
     "start": "zotero-plugin serve",
@@ -27,6 +27,7 @@
     "lint:fix": "prettier --write . && eslint . --fix",
     "release": "zotero-plugin release",
     "test": "zotero-plugin test",
+    "test:compat": "node --test tests/compatibility.test.mjs",
     "update-deps": "npm update --save"
   },
   "dependencies": {

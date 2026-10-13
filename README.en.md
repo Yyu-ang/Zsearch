@@ -2,7 +2,7 @@
 
 > One-stop literature search inside Zotero across Scopus / PubMed / arXiv / Semantic Scholar / Springer / IEEE Xplore / Google Scholar, with a Google-like search experience. Supports aggregated search, one-click import, PDF download chain, journal rank badges, citation-count column, batch export, and auto-translating titles during search.
 
-Built for Zotero 7 / 8 / 9, following Google Material Design visual style.
+Built for Zotero 7 / 8 / 9 / 10, following Google Material Design visual style.
 
 [简体中文](README.md) | **English**
 
@@ -116,14 +116,14 @@ The `📊 Stats` button below the search box opens a statistics panel for the cu
 
 ### Option 1: Download prebuilt XPI
 
-1. Download [build/zsearch.xpi](build/zsearch.xpi)
+1. Download the latest `zsearch.xpi` from [GitHub Releases](https://github.com/cloneorcopy/Zsearch/releases/latest/download/zsearch.xpi)
 2. Zotero → `Tools` → `Add-ons` → gear icon → `Install Add-on From File...`
 3. Select the downloaded `.xpi` file
 
 ### Option 2: Build from source
 
 ```bash
-git clone https://github.com/zotero-plugin-dev/zsearch.git
+git clone https://github.com/cloneorcopy/Zsearch.git
 cd zsearch
 npm install
 node node_modules/zotero-plugin-scaffold/bin/zotero-plugin.mjs build
@@ -393,7 +393,7 @@ Supports Chinese (zh-CN) and English (en-US) bilingual UI, automatically followi
 
 ## Compatibility
 
-- Zotero 7 / 8 / 9 (`strict_min_version: 6.999`, `strict_max_version: 9.*`)
+- Zotero 7 / 8 / 9 / 10 (`strict_min_version: 6.999`, `strict_max_version: 10.0.*`; includes Zotero 10.0.6, with manual runtime validation recommended)
 - Windows / macOS / Linux
 
 ---
@@ -478,5 +478,5 @@ npm run lint:fix
 
 ## Feedback & Issues
 
-- File an issue: [GitHub Issues](https://github.com/zotero-plugin-dev/zsearch/issues)
+- File an issue: [GitHub Issues](https://github.com/cloneorcopy/Zsearch/issues)
 - Design doc: [docs/DESIGN.md](docs/DESIGN.md)
